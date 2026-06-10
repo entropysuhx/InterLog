@@ -1,0 +1,315 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Theme {
+  LIGHT
+  DARK
+  FOCUS
+}
+
+enum CategorizationSource {
+  AI
+  USER
+  FALLBACK
+}
+
+enum FocusSessionStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum ReflectionDayStatus {
+  OFFERED
+  COMPLETED
+  SKIPPED
+}
+
+enum InsightConfidence {
+  EMERGING
+  CONSISTENT
+  STRONG
+}
+
+enum WrappedPeriod {
+  MONTHLY
+  YEARLY
+}
+
+enum GenerationStatus {
+  PENDING
+  READY
+  FAILED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts         Account[]
+  sessions         Session[]
+  credential       Credential?
+  preference       UserPreference?
+  activities       Activity[]
+  focusSessions    FocusSession[]
+  reflectionDays   ReflectionDay[]
+  reflections      Reflection[]
+  moodEntries      MoodEntry[]
+  insights         Insight[]
+  insightFeedback  InsightFeedback[]
+  wrappedSummaries WrappedSummary[]
+  guestMigrations  GuestMigration[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Credential {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  passwordHash String   @db.VarChar(255)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserPreference {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  timezone          String   @default("UTC") @db.VarChar(64)
+  weekStartsOn      Int      @default(1)
+  theme             Theme    @default(LIGHT)
+  showMoodInHistory Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Category {
+  id         String     @id
+  key        String     @unique @db.VarChar(32)
+  name       String     @db.VarChar(64)
+  icon       String     @db.VarChar(32)
+  sortOrder  Int
+  activities Activity[]
+}
+
+model Activity {
+  id                   String               @id @default(cuid())
+  userId               String
+  title                String               @db.VarChar(200)
+  notes                String?              @db.VarChar(2000)
+  startTime            DateTime
+  endTime              DateTime?
+  duration             Int?
+  categoryId           String
+  categorizationSource CategorizationSource @default(AI)
+  aiConfidence         Float?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category      Category       @relation(fields: [categoryId], references: [id])
+  focusSessions FocusSession[]
+
+  @@unique([id, userId])
+  @@index([userId, startTime])
+  @@index([userId, categoryId])
+  @@index([userId, updatedAt])
+}
+
+model FocusSession {
+  id         String             @id @default(cuid())
+  userId     String
+  activityId String?
+  title      String             @db.VarChar(200)
+  status     FocusSessionStatus @default(ACTIVE)
+  startTime  DateTime
+  endTime    DateTime?
+  duration   Int?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activity Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+
+  @@unique([id, userId])
+  @@index([userId, status])
+  @@index([userId, startTime])
+}
+
+model ReflectionDay {
+  id              String              @id @default(cuid())
+  userId          String
+  activityDate    String              @db.VarChar(10)
+  status          ReflectionDayStatus @default(OFFERED)
+  primaryPrompt   String              @db.VarChar(500)
+  optionalPrompts Json
+  offeredAt       DateTime            @default(now())
+  completedAt     DateTime?
+  updatedAt       DateTime            @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, activityDate])
+  @@index([userId, status])
+}
+
+model Reflection {
+  id           String   @id @default(cuid())
+  userId       String
+  activityDate String   @db.VarChar(10)
+  prompt       String   @db.VarChar(500)
+  answer       String   @db.VarChar(5000)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, activityDate, prompt])
+  @@index([userId, activityDate])
+}
+
+model MoodEntry {
+  id           String   @id @default(cuid())
+  userId       String
+  activityDate String   @db.VarChar(10)
+  mood         Int
+  note         String?  @db.VarChar(1000)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, activityDate])
+}
+
+model Insight {
+  id             String            @id @default(cuid())
+  userId         String
+  periodKey      String            @db.VarChar(32)
+  sourceRevision String            @db.VarChar(64)
+  observation    String            @db.VarChar(1000)
+  interpretation String            @db.VarChar(1000)
+  recommendation String?           @db.VarChar(1000)
+  evidence       String            @db.VarChar(500)
+  confidence     InsightConfidence
+  categoryKey    String?           @db.VarChar(32)
+  signature      String            @db.VarChar(64)
+  dismissedAt    DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feedback InsightFeedback[]
+
+  @@unique([userId, periodKey, sourceRevision, signature])
+  @@unique([id, userId])
+  @@index([userId, periodKey, sourceRevision])
+}
+
+model InsightFeedback {
+  id        String   @id @default(cuid())
+  userId    String
+  insightId String
+  helpful   Boolean
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  insight Insight @relation(fields: [insightId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, insightId])
+}
+
+model WrappedSummary {
+  id              String           @id @default(cuid())
+  userId          String
+  period          WrappedPeriod
+  periodKey       String           @db.VarChar(16)
+  sourceRevision  String           @db.VarChar(64)
+  status          GenerationStatus @default(PENDING)
+  cards           Json?
+  generationCount Int              @default(0)
+  errorCode       String?          @db.VarChar(64)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, period, periodKey, sourceRevision])
+  @@index([userId, period, periodKey])
+}
+
+model GuestMigration {
+  id             String   @id @default(cuid())
+  userId         String
+  guestId        String   @db.VarChar(64)
+  idempotencyKey String   @unique @db.VarChar(128)
+  importedCount  Int
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, guestId])
+}
+
+model RateLimitEvent {
+  id          String   @id @default(cuid())
+  key         String   @db.VarChar(200)
+  action      String   @db.VarChar(64)
+  windowStart DateTime
+  count       Int      @default(1)
+  expiresAt   DateTime
+  updatedAt   DateTime @updatedAt
+
+  @@unique([key, action, windowStart])
+  @@index([expiresAt])
+}

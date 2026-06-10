@@ -1,0 +1,30 @@
+import type { ThemeTokens } from "./types";
+
+export const lightTheme: ThemeTokens = {
+  background: "#f8f9fb",
+  surface: "#ffffff",
+  surfaceSubtle: "#f1f3f6",
+  surfaceElevated: "#ffffff",
+  surfaceHover: "#f5f3ff",
+  surfaceActive: "#ebe7ff",
+  textPrimary: "#101828",
+  textSecondary: "#344054",
+  textMuted: "#667085",
+  textDisabled: "#98a2b3",
+  textInverse: "#ffffff",
+  border: "#e4e7ec",
+  borderHover: "#d0d5dd",
+  borderActive: "#7047f5",
+  focusRing: "#9278ff",
+  interactivePrimary: "#5b2fe0",
+  interactivePrimaryHover: "#4823b8",
+  interactivePrimaryActive: "#3c2195",
+  interactiveSecondary: "#ffffff",
+  interactiveSecondaryHover: "#f1f3f6",
+  success: "#059669",
+  warning: "#d97706",
+  error: "#e11d48",
+  info: "#2563eb",
+  overlay: "rgb(11 15 25 / 0.48)",
+};
+

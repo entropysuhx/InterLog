@@ -1,0 +1,30 @@
+import type { ThemeTokens } from "./types";
+
+export const focusTheme: ThemeTokens = {
+  background: "#f4f1eb",
+  surface: "#fbfaf7",
+  surfaceSubtle: "#ece8df",
+  surfaceElevated: "#ffffff",
+  surfaceHover: "#eee9fa",
+  surfaceActive: "#e2daf7",
+  textPrimary: "#24211f",
+  textSecondary: "#4c4742",
+  textMuted: "#746e67",
+  textDisabled: "#aaa39a",
+  textInverse: "#ffffff",
+  border: "#ded8ce",
+  borderHover: "#c7beb1",
+  borderActive: "#6941c6",
+  focusRing: "#9278ff",
+  interactivePrimary: "#6941c6",
+  interactivePrimaryHover: "#5733a3",
+  interactivePrimaryActive: "#462884",
+  interactiveSecondary: "#fbfaf7",
+  interactiveSecondaryHover: "#ece8df",
+  success: "#087f78",
+  warning: "#a66b08",
+  error: "#c53d50",
+  info: "#386f9f",
+  overlay: "rgb(36 33 31 / 0.42)",
+};
+
