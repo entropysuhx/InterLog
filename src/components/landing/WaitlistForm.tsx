@@ -25,7 +25,7 @@ export default function WaitlistForm() {
         <CheckCircle2 size={24} className="text-interactive-primary" />
         <div>
           <p className="text-label font-[550]">Thank you.</p>
-          <p className="text-body-sm text-text-secondary">You're on the list.</p>
+          <p className="text-body-sm text-text-secondary">You&rsquo;re on the list.</p>
         </div>
       </div>
     );

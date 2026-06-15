@@ -4,7 +4,6 @@ import {
   BarChart3,
   CalendarDays,
   Clock3,
-  Gift,
   Home,
   LayoutDashboard,
   Menu,

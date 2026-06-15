@@ -6,6 +6,18 @@ import { addDays, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isW
 
 import TimelineView from "@/components/timeline/TimelineView";
 import { useProductData } from "@/components/providers/ProductDataProvider";
+import type { ActivityView } from "@/types";
+
+function groupActivitiesByDate(activityList: ActivityView[]) {
+  const grouped = activityList.reduce((acc, a) => {
+    const d = format(new Date(a.startTime), "yyyy-MM-dd");
+    if (!acc[d]) acc[d] = { count: 0, duration: 0, date: new Date(a.startTime) };
+    acc[d].count += 1;
+    acc[d].duration += a.duration ?? 0;
+    return acc;
+  }, {} as Record<string, { count: number; duration: number; date: Date }>);
+  return Object.values(grouped).sort((a, b) => b.date.getTime() - a.date.getTime());
+}
 
 export default function TimelinePage() {
   const { activities, isAuthenticated, isReady, refresh } = useProductData();
@@ -23,17 +35,6 @@ export default function TimelinePage() {
     const end = endOfMonth(date);
     return activities.filter((a) => isWithinInterval(new Date(a.startTime), { start, end }));
   }, [activities, date]);
-
-  const groupActivitiesByDate = (activityList: typeof activities) => {
-    const grouped = activityList.reduce((acc, a) => {
-      const d = format(new Date(a.startTime), "yyyy-MM-dd");
-      if (!acc[d]) acc[d] = { count: 0, duration: 0, date: new Date(a.startTime) };
-      acc[d].count += 1;
-      acc[d].duration += a.duration ?? 0;
-      return acc;
-    }, {} as Record<string, { count: number; duration: number; date: Date }>);
-    return Object.values(grouped).sort((a, b) => b.date.getTime() - a.date.getTime());
-  };
 
   const weeklyGrouped = useMemo(() => groupActivitiesByDate(weeklyActivities), [weeklyActivities]);
   const monthlyGrouped = useMemo(() => groupActivitiesByDate(monthlyActivities), [monthlyActivities]);

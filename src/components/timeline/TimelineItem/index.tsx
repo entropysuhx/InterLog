@@ -1,4 +1,4 @@
-import { Clock3, Pencil } from "lucide-react";
+import { Pencil } from "lucide-react";
 
 import CategoryBadge from "@/components/activity/CategoryBadge";
 import type { TimelineItemProps } from "@/components/timeline/TimelineItem/TimelineItem.types";
