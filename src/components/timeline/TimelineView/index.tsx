@@ -2,6 +2,7 @@
 
 import { Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { format, isSameDay } from "date-fns";
 
 import TimelineItem from "@/components/timeline/TimelineItem";
 import ActivityEditor from "@/components/activity/ActivityEditor";
@@ -39,7 +40,7 @@ export default function TimelineView({
   );
   const laneActivities = useMemo(() => assignLanes(dayActivities), [dayActivities]);
   const gaps = useMemo(() => getGaps(dayActivities), [dayActivities]);
-  const hours = Array.from({ length: 17 }, (_, index) => index + 6);
+  const hours = Array.from({ length: 19 }, (_, index) => index + 6); // 6 AM → midnight
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(new Date()), 60000);
@@ -52,7 +53,9 @@ export default function TimelineView({
     <section id="timeline-view" className="rounded-lg border border-border bg-surface p-ds-12">
       <div className="mb-ds-12 flex items-center justify-between">
         <div>
-          <h2 className="text-heading-4 font-semibold text-text-primary">Today</h2>
+          <h2 className="text-heading-4 font-semibold text-text-primary">
+            {isSameDay(date, new Date()) ? "Today" : format(date, "EEEE")}
+          </h2>
           <p className="text-caption text-text-muted">{date.toLocaleDateString(undefined, { dateStyle: "full" })}</p>
         </div>
         <div className="flex items-center gap-ds-8">
@@ -74,7 +77,7 @@ export default function TimelineView({
         </div>
       </div>
       <div className="grid grid-cols-[var(--spacing-timeline-axis)_minmax(0,1fr)]">
-        <div aria-hidden="true" className="relative">
+        <div aria-hidden="true" className="relative" style={{ minHeight: hours.length * 80 }}>
           {hours.map((hour) => (
             <span
               key={hour}
@@ -85,7 +88,10 @@ export default function TimelineView({
             </span>
           ))}
         </div>
-        <div className="relative min-h-timeline-day overflow-hidden rounded-md bg-surface-subtle">
+        <div
+          className="relative overflow-visible rounded-md bg-surface-subtle pb-ds-16"
+          style={{ minHeight: hours.length * 80 }}
+        >
           {hours.map((hour) => (
             <div
               key={hour}

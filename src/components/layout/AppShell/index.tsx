@@ -6,6 +6,7 @@ import {
   Clock3,
   Gift,
   Home,
+  LayoutDashboard,
   Menu,
   Moon,
   NotebookPen,
@@ -28,9 +29,9 @@ const navigation = [
   { href: "/dashboard", label: "Overview", icon: Home },
   { href: "/timeline", label: "Timeline", icon: Clock3 },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
-  { href: "/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/analytics", label: "Insights", icon: BarChart3 },
   { href: "/reflection", label: "Reflections", icon: NotebookPen },
-  { href: "/wrapped", label: "Wrapped", icon: Gift },
+  { href: "/wrapped", label: "Wrapped", icon: LayoutDashboard },
 ] as const;
 
 export default function AppShell({
@@ -90,7 +91,7 @@ export default function AppShell({
           className="flex min-h-touch-target items-center gap-ds-12 text-heading-4 font-semibold text-text-primary"
         >
           <span className="flex size-ds-32 items-center justify-center rounded-md bg-interactive-primary text-text-inverse">
-            <Sparkles size={18} aria-hidden="true" />
+            <Clock3 size={18} aria-hidden="true" />
           </span>
           InterLog
         </Link>
@@ -173,9 +174,14 @@ export default function AppShell({
           initialSnapshot={initialSnapshot}
           isAuthenticated={isAuthenticated}
         >
-          <main className="mx-auto mt-shell-topbar w-full max-w-content p-ds-16 md:p-ds-24 lg:p-ds-32">
+          <main className="mx-auto mt-shell-topbar flex-1 w-full max-w-content p-ds-16 md:p-ds-24 lg:p-ds-32 min-h-[calc(100vh-var(--spacing-shell-topbar)-60px)]">
             {children}
           </main>
+          <footer className="mx-auto w-full max-w-content px-ds-16 md:px-ds-24 lg:px-ds-32 pb-ds-24 flex justify-end gap-ds-16 text-caption text-text-muted">
+            <Link href="/" className="hover:text-text-primary">About InterLog</Link>
+            <Link href="#" className="hover:text-text-primary">Terms & Conditions</Link>
+            <Link href="#" className="hover:text-text-primary">Privacy Policy</Link>
+          </footer>
         </ProductDataProvider>
       </div>
     </div>

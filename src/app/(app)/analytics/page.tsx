@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { generateInsights } from "@/actions/insight";
 import AnalyticsDashboard from "@/components/analytics/AnalyticsDashboard";
+import AiReflectionSection from "@/components/analytics/AiReflectionSection";
 import InsightCard from "@/components/insight/InsightCard";
 import { useProductData } from "@/components/providers/ProductDataProvider";
 
@@ -31,11 +32,12 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-ds-24">
       <header>
-        <h1 className="text-heading-2 font-[650] text-text-primary">Analytics</h1>
-        <p className="mt-ds-4 text-body-sm text-text-secondary">Patterns from your own history, without comparison to anyone else.</p>
+        <h1 className="text-heading-2 font-[650] text-text-primary">Insights</h1>
+        <p className="mt-ds-4 text-body-sm text-text-secondary">Understand your patterns rather than evaluate performance.</p>
       </header>
       {isReady ? (
         <>
+          <AiReflectionSection />
           <AnalyticsDashboard activities={activities} reflectionDays={reflectionDays} />
           <section className="space-y-ds-16" aria-label="Your insights">
             <div>

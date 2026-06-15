@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, Check, ChevronDown, Pencil } from "lucide-react";
+import { BookOpen, Check, ChevronDown, Loader2, Pencil } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { saveReflection } from "@/actions/reflection";
@@ -38,6 +38,7 @@ export default function ReflectionCard({
   const [mood, setMood] = useState<number | null>(null);
   const [isExpanded, setIsExpanded] = useState(!compact);
   const [status, setStatus] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(savedReflections.length === 0);
   const [savedAt, setSavedAt] = useState<string | null>(
     savedReflections[0]?.updatedAt ?? null,
@@ -55,6 +56,13 @@ export default function ReflectionCard({
     if (draft) {
       setAnswers(draft.answers);
       setMood(draft.mood);
+      setSavedAt(null);
+      setIsEditing(true);
+    } else {
+      setAnswers({});
+      setMood(null);
+      setSavedAt(null);
+      setIsEditing(true);
     }
   }, [date, savedReflections]);
 
@@ -74,6 +82,7 @@ export default function ReflectionCard({
       .map((prompt) => ({ prompt, answer: answers[prompt]?.trim() ?? "" }))
       .filter((answer) => answer.answer);
     if (!completed[0]?.answer) return;
+    setIsSaving(true);
     if (isAuthenticated) {
       const result = await saveReflection({
         activityDate: date,
@@ -82,6 +91,7 @@ export default function ReflectionCard({
       });
       if (!result.success) {
         setStatus(result.error);
+        setIsSaving(false);
         return;
       }
     } else {
@@ -91,6 +101,7 @@ export default function ReflectionCard({
     setStatus("Reflection saved.");
     setSavedAt(new Date().toISOString());
     setIsEditing(false);
+    setIsSaving(false);
     onSaved?.();
   }
 
@@ -191,10 +202,11 @@ export default function ReflectionCard({
             <button
               type="button"
               onClick={() => void handleSave()}
-              disabled={!answers[prompts.primaryPrompt]?.trim()}
-              className="min-h-touch-target rounded-md bg-interactive-primary px-ds-16 text-label font-[550] text-text-inverse hover:bg-interactive-primary-hover disabled:bg-surface-subtle disabled:text-text-disabled"
+              disabled={!answers[prompts.primaryPrompt]?.trim() || isSaving}
+              className="flex min-h-touch-target items-center gap-ds-8 rounded-md bg-interactive-primary px-ds-16 text-label font-[550] text-text-inverse hover:bg-interactive-primary-hover disabled:bg-surface-subtle disabled:text-text-disabled"
             >
-              Save reflection
+              {isSaving && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
+              {isSaving ? "Saving..." : "Save reflection"}
             </button>
           </div>
             </>

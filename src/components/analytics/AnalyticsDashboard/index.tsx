@@ -68,7 +68,7 @@ export default function AnalyticsDashboard({
       </div>
       <div className="grid gap-ds-20 xl:grid-cols-2">
         <article className="rounded-lg border border-border bg-surface p-ds-20">
-          <h2 className="text-heading-4 font-semibold text-text-primary">Weekly trend</h2>
+          <h2 className="text-heading-4 font-semibold text-text-primary">Weekly Time Tracked</h2>
           <p className="mt-ds-4 text-body-sm text-text-muted">Tracked time across the last seven days.</p>
           <TrendChart data={snapshot.dailyTrend} />
         </article>

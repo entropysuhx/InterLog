@@ -28,6 +28,7 @@ export default function TimelineItem({ activity, top, height, onEdit }: Timeline
       tabIndex={0}
       className={cn(
         "absolute overflow-hidden rounded-lg border px-ds-8 py-ds-4 text-text-primary transition-shadow hover:shadow-sm focus-visible:shadow-sm",
+        height < 52 ? "flex flex-col justify-center" : "flex flex-col justify-start",
         categoryStyles[activity.categoryKey],
         activity.endTime === null && "border-dashed",
       )}
@@ -46,38 +47,43 @@ export default function TimelineItem({ activity, top, height, onEdit }: Timeline
         }
       }}
     >
-      <div className="flex min-w-0 items-center justify-between gap-ds-8">
-        <p className="truncate text-label font-[550]">{activity.title}</p>
-        <div className="flex shrink-0 items-center gap-ds-4">
-          <span className="text-caption tabular-nums text-text-secondary">
-            {formatDuration(activity.duration)}
-          </span>
-          {onEdit && (
-            <button
-              type="button"
-              aria-label={`Edit ${activity.title}`}
-              className="flex size-touch-target items-center justify-center rounded-md text-text-secondary hover:bg-surface-hover"
-              onClick={(event) => {
-                event.stopPropagation();
-                onEdit(activity);
-              }}
-            >
-              <Pencil size={14} aria-hidden="true" />
-            </button>
+      <div className="flex min-w-0 items-start justify-between gap-ds-8">
+        <div className="flex min-w-0 flex-col gap-ds-4">
+          <p className="truncate text-label font-[550] leading-tight pt-[2px]">{activity.title}</p>
+          {height >= 52 && (
+            <div className="flex items-center">
+              <CategoryBadge categoryKey={activity.categoryKey} compact />
+            </div>
+          )}
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-ds-4">
+          <div className="flex items-center gap-ds-4">
+            <span className="text-caption tabular-nums text-text-secondary mt-[2px]">
+              {formatDuration(activity.duration)}
+            </span>
+            {onEdit && (
+              <button
+                type="button"
+                aria-label={`Edit ${activity.title}`}
+                className="flex size-touch-target items-center justify-center rounded-md text-text-secondary hover:bg-surface-hover"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onEdit(activity);
+                }}
+              >
+                <Pencil size={14} aria-hidden="true" />
+              </button>
+            )}
+          </div>
+          {height >= 52 && (
+            <span className="flex items-center gap-ds-4 truncate text-caption text-text-muted">
+              {formatTimeRange(activity.startTime, activity.endTime)}
+            </span>
           )}
         </div>
       </div>
-      {height >= 52 && (
-        <div className="mt-ds-4 flex items-center justify-between gap-ds-8">
-          <CategoryBadge categoryKey={activity.categoryKey} compact />
-          <span className="flex items-center gap-ds-4 truncate text-caption text-text-muted">
-            <Clock3 size={12} aria-hidden="true" />
-            {formatTimeRange(activity.startTime, activity.endTime)}
-          </span>
-        </div>
-      )}
       {activity.endTime === null && (
-        <span className="text-caption font-[550] text-text-secondary">In progress</span>
+        <span className="mt-ds-4 text-caption font-[550] text-text-secondary">In progress</span>
       )}
     </article>
   );

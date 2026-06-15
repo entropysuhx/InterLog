@@ -38,13 +38,25 @@ const icons: Record<CategoryKey, typeof Brain> = {
   personal: Heart,
 };
 
-export default function CategoryBadge({ categoryKey, compact = false }: CategoryBadgeProps) {
+const selectedStyles: Record<CategoryKey, string> = {
+  "deep-work": "bg-activity-deep-work-icon text-white border-activity-deep-work-icon",
+  learning: "bg-activity-learning-icon text-white border-activity-learning-icon",
+  reflection: "bg-activity-reflection-icon text-white border-activity-reflection-icon",
+  exercise: "bg-activity-exercise-icon text-white border-activity-exercise-icon",
+  social: "bg-activity-social-icon text-white border-activity-social-icon",
+  meeting: "bg-activity-meeting-icon text-white border-activity-meeting-icon",
+  admin: "bg-activity-admin-icon text-white border-activity-admin-icon",
+  break: "bg-activity-break-icon text-white border-activity-break-icon",
+  personal: "bg-activity-personal-icon text-white border-activity-personal-icon",
+};
+
+export default function CategoryBadge({ categoryKey, compact = false, selected = false }: CategoryBadgeProps) {
   const Icon = icons[categoryKey];
   return (
     <span
       className={cn(
         "inline-flex items-center gap-ds-4 rounded-full border px-ds-8 py-ds-4 text-caption font-[550]",
-        styles[categoryKey],
+        selected ? selectedStyles[categoryKey] : styles[categoryKey],
       )}
     >
       <Icon size={compact ? 12 : 14} aria-hidden="true" />

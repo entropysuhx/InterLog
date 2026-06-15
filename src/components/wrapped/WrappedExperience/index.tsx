@@ -1,7 +1,8 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, RotateCcw, Sparkles } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, Download, RotateCcw, Share, Sparkles } from "lucide-react";
+import html2canvas from "html2canvas";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { generateWrapped } from "@/actions/wrapped";
 import WrappedVisual from "@/components/wrapped/WrappedVisual";
@@ -24,6 +25,8 @@ export default function WrappedExperience({
   const [generatedCards, setGeneratedCards] = useState<WrappedCardData[] | null>(null);
   const [insufficientData, setInsufficientData] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const cardRef = useRef<HTMLElement>(null);
   const localCards = useMemo<WrappedCardData[]>(() => {
     const now = new Date();
     const periodActivities = activities.filter((activity) => {
@@ -102,6 +105,32 @@ export default function WrappedExperience({
     };
   }, [isAuthenticated, period]);
 
+  async function handleDownloadImage() {
+    if (!cardRef.current) return;
+    setIsExporting(true);
+    try {
+      const canvas = await html2canvas(cardRef.current, { backgroundColor: null, scale: 2 });
+      const url = canvas.toDataURL("image/png");
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `interlog-wrapped-${period}.png`;
+      a.click();
+    } catch (e) {
+      console.error(e);
+    }
+    setIsExporting(false);
+  }
+
+  async function handleShare() {
+    const text = `Here's how I spent my ${period === "monthly" ? "month" : "year"}.\n\n${card.headline}\n${card.stat ? `${card.stat.value} ${card.stat.label}\n` : ""}${card.body}`;
+    if (navigator.share) {
+      navigator.share({ title: "InterLog Wrapped", text }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(text);
+      alert("Summary copied to clipboard!");
+    }
+  }
+
   if (insufficientData) {
     return (
       <section className="mx-auto max-w-reading rounded-2xl border border-border bg-surface p-ds-32 text-center">
@@ -142,25 +171,27 @@ export default function WrappedExperience({
           </button>
         ))}
       </div>
-      <article className="min-h-panel-lg rounded-2xl bg-surface-elevated p-ds-32 shadow-xl md:p-ds-48">
+      <article ref={cardRef} className="min-h-panel-lg rounded-2xl bg-surface-elevated p-ds-32 shadow-xl md:p-ds-48 overflow-hidden relative">
         <span className="flex items-center gap-ds-8 text-label font-[550] text-interactive-primary">
-          <Sparkles size={18} aria-hidden="true" />
+          <Sparkles size={18} aria-hidden="true" className="animate-pulse" />
           InterLog Wrapped
         </span>
         {isLoading && <p className="mt-ds-12 text-caption text-text-muted">Preparing your report...</p>}
-        <div className="mt-ds-24">
-          <WrappedVisual type={card.type} />
-        </div>
-        <div className="mt-ds-32">
-          <p className="text-caption uppercase text-text-muted">{card.type.replaceAll("-", " ")}</p>
-          <h2 className="mt-ds-12 text-heading-2 font-[650] text-text-primary">{card.headline}</h2>
-          {card.stat && (
-            <div className="mt-ds-24">
-              <p className="text-display-m font-[650] tabular-nums text-interactive-primary">{card.stat.value}</p>
-              <p className="text-body-md text-text-secondary">{card.stat.label}</p>
-            </div>
-          )}
-          <p className="mt-ds-24 text-body-lg text-text-secondary">{card.body}</p>
+        <div key={index} className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both">
+          <div className="mt-ds-24">
+            <WrappedVisual type={card.type} />
+          </div>
+          <div className="mt-ds-32">
+            <p className="text-caption uppercase text-text-muted">{card.type.replaceAll("-", " ")}</p>
+            <h2 className="mt-ds-12 text-heading-2 font-[650] text-text-primary">{card.headline}</h2>
+            {card.stat && (
+              <div className="mt-ds-24">
+                <p className="text-display-m font-[650] tabular-nums text-interactive-primary animate-in zoom-in-95 duration-700 delay-150 fill-mode-both">{card.stat.value}</p>
+                <p className="text-body-md text-text-secondary">{card.stat.label}</p>
+              </div>
+            )}
+            <p className="mt-ds-24 text-body-lg text-text-secondary">{card.body}</p>
+          </div>
         </div>
       </article>
       <div className="mt-ds-16 flex flex-wrap items-center justify-between gap-ds-12">
@@ -200,6 +231,29 @@ export default function WrappedExperience({
             Next <ChevronRight size={16} aria-hidden="true" />
           </button>
         )}
+      </div>
+      <div className="mt-ds-32 border-t border-border pt-ds-20">
+        <h3 className="text-label font-[550] text-text-primary">Share Your {period === "monthly" ? "Month" : "Year"}</h3>
+        <p className="mt-ds-4 text-caption text-text-muted">A look back at the moments that shaped my time.</p>
+        <div className="mt-ds-16 flex flex-wrap gap-ds-12">
+          <button
+            type="button"
+            onClick={() => void handleDownloadImage()}
+            disabled={isExporting}
+            className="flex min-h-touch-target items-center gap-ds-8 rounded-md bg-interactive-primary px-ds-16 text-label text-text-inverse disabled:opacity-50"
+          >
+            <Download size={16} aria-hidden="true" />
+            {isExporting ? "Capturing..." : "Download Image"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleShare()}
+            className="flex min-h-touch-target items-center gap-ds-8 rounded-md border border-border px-ds-16 text-label text-text-primary hover:bg-surface-hover"
+          >
+            <Share size={16} aria-hidden="true" />
+            Share Summary
+          </button>
+        </div>
       </div>
     </section>
   );

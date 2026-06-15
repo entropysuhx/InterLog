@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Trash2, X } from "lucide-react";
+import { AlertTriangle, Loader2, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { createActivity, deleteActivity, updateActivity } from "@/actions/activity";
@@ -67,24 +67,6 @@ export default function ActivityEditor({
 
   if (!isOpen) return null;
 
-  async function resolveGuestCategory(): Promise<{
-    categoryKey: CategoryKey;
-    confidence: number;
-    source: "AI" | "FALLBACK";
-  }> {
-    try {
-      const response = await fetch("/api/categorize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim() }),
-      });
-      if (response.ok) return await response.json() as Awaited<ReturnType<typeof resolveGuestCategory>>;
-    } catch {
-      // Admin remains the deterministic fallback.
-    }
-    return { categoryKey: "admin", confidence: 0, source: "FALLBACK" };
-  }
-
   async function handleSave() {
     if (!title.trim() || !startTime || (!isInProgress && !endTime)) return;
     const startIso = toIso(startTime);
@@ -96,79 +78,83 @@ export default function ActivityEditor({
     setIsSaving(true);
     setStatus("");
 
-    if (isAuthenticated) {
-      const result = activity
-        ? await updateActivity({
-            id: activity.id,
-            title: title.trim(),
-            startTime: startIso,
-            endTime: endIso,
-            categoryKey: categoryKey || activity.categoryKey,
-            notes: notes.trim() || null,
-          })
-        : await createActivity({
-            title: title.trim(),
-            startTime: startIso,
-            endTime: endIso,
-            categoryKey: categoryKey || undefined,
-            notes: notes.trim() || null,
-          });
-      if (!result.success) {
-        setStatus(result.error);
-        setIsSaving(false);
-        return;
+    try {
+      if (isAuthenticated) {
+        const result = activity
+          ? await updateActivity({
+              id: activity.id,
+              title: title.trim(),
+              startTime: startIso,
+              endTime: endIso,
+              categoryKey: categoryKey || activity.categoryKey,
+              notes: notes.trim() || null,
+            })
+          : await createActivity({
+              title: title.trim(),
+              startTime: startIso,
+              endTime: endIso,
+              categoryKey: categoryKey || "admin",
+              notes: notes.trim() || null,
+            });
+        if (!result.success) {
+          setStatus(result.error);
+          return;
+        }
+        if (result.data.overlappingActivities.length > 0) {
+          setStatus(`Saved. This overlaps with ${result.data.overlappingActivities[0].title}.`);
+        }
+      } else if (activity) {
+        guestStore.updateActivity(activity.id, {
+          title: title.trim(),
+          startTime: startIso,
+          endTime: endIso,
+          categoryKey: categoryKey || activity.categoryKey,
+          categorizationSource: categoryKey ? "USER" : activity.categorizationSource,
+          aiConfidence: categoryKey ? null : activity.aiConfidence,
+          notes: notes.trim() || null,
+        });
+      } else {
+        guestStore.createActivity({
+          title: title.trim(),
+          startTime: startIso,
+          endTime: endIso,
+          categoryKey: categoryKey || "admin",
+          categorizationSource: categoryKey ? "USER" : "FALLBACK",
+          aiConfidence: 0,
+          notes: notes.trim() || null,
+        });
       }
-      if (result.data.overlappingActivities.length > 0) {
-        setStatus(`Saved. This overlaps with ${result.data.overlappingActivities[0].title}.`);
-      }
-    } else if (activity) {
-      guestStore.updateActivity(activity.id, {
-        title: title.trim(),
-        startTime: startIso,
-        endTime: endIso,
-        categoryKey: categoryKey || activity.categoryKey,
-        categorizationSource: categoryKey ? "USER" : activity.categorizationSource,
-        aiConfidence: categoryKey ? null : activity.aiConfidence,
-        notes: notes.trim() || null,
-      });
-    } else {
-      const suggestion = categoryKey ? null : await resolveGuestCategory();
-      guestStore.createActivity({
-        title: title.trim(),
-        startTime: startIso,
-        endTime: endIso,
-        categoryKey: categoryKey || suggestion?.categoryKey || "admin",
-        categorizationSource: categoryKey ? "USER" : suggestion?.source ?? "FALLBACK",
-        aiConfidence: categoryKey ? null : suggestion?.confidence ?? 0,
-        notes: notes.trim() || null,
-      });
-    }
 
-    setIsSaving(false);
-    onSaved();
-    onClose();
+      onSaved();
+      onClose();
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   async function handleDelete() {
     if (!activity || !window.confirm(`Delete “${activity.title}”?`)) return;
     setIsSaving(true);
-    if (isAuthenticated) {
-      const result = await deleteActivity({ id: activity.id });
-      if (!result.success) {
-        setStatus(result.error);
-        setIsSaving(false);
-        return;
+    try {
+      if (isAuthenticated) {
+        const result = await deleteActivity({ id: activity.id });
+        if (!result.success) {
+          setStatus(result.error);
+          return;
+        }
+      } else {
+        guestStore.deleteActivity(activity.id);
       }
-    } else {
-      guestStore.deleteActivity(activity.id);
+      onSaved();
+      onClose();
+    } finally {
+      setIsSaving(false);
     }
-    onSaved();
-    onClose();
   }
 
   return (
     <div
-      className="fixed inset-0 z-modal flex items-end justify-center bg-overlay p-ds-16 sm:items-center"
+      className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/60 p-ds-16 backdrop-blur-sm sm:items-center"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
@@ -179,12 +165,12 @@ export default function ActivityEditor({
         role="dialog"
         aria-modal="true"
         aria-labelledby="activity-editor-title"
-        className="max-h-full w-full max-w-reading overflow-y-auto rounded-xl bg-surface-elevated p-ds-20 shadow-xl animate-in"
+        className="max-h-full w-full max-w-xl overflow-y-auto rounded-xl bg-surface-elevated p-ds-20 shadow-xl animate-in"
       >
         <div className="flex items-center justify-between gap-ds-12">
           <div>
             <h2 id="activity-editor-title" className="text-heading-3 font-semibold text-text-primary">
-              {activity ? "Edit activity" : "Add activity"}
+              {activity ? "Edit Activity" : "Add Activity"}
             </h2>
             <p className="mt-ds-4 text-body-sm text-text-muted">
               Set the time explicitly or leave the activity in progress.
@@ -244,28 +230,19 @@ export default function ActivityEditor({
           <fieldset>
             <legend className="text-label font-[550] text-text-secondary">Category</legend>
             <div className="mt-ds-8 flex flex-wrap gap-ds-8">
-              {!activity && (
-                <button
-                  type="button"
-                  onClick={() => setCategoryKey("")}
-                  className={
-                    categoryKey === ""
-                      ? "min-h-touch-target rounded-full border border-border-active bg-surface-active px-ds-12 text-caption text-text-primary"
-                      : "min-h-touch-target rounded-full border border-border px-ds-12 text-caption text-text-muted"
-                  }
-                >
-                  AI suggestion
-                </button>
-              )}
               {CATEGORY_KEYS.map((key) => (
                 <button
                   key={key}
                   type="button"
                   aria-pressed={categoryKey === key}
                   onClick={() => setCategoryKey(key)}
-                  className="min-h-touch-target rounded-full"
+                  className={
+                    categoryKey === key
+                      ? "min-h-touch-target rounded-full outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 transition-all"
+                      : "min-h-touch-target rounded-full opacity-60 transition-opacity hover:opacity-100 outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2"
+                  }
                 >
-                  <CategoryBadge categoryKey={key} />
+                  <CategoryBadge categoryKey={key} selected={categoryKey === key} />
                 </button>
               ))}
             </div>
@@ -313,9 +290,10 @@ export default function ActivityEditor({
               type="button"
               disabled={isSaving || !title.trim() || !startTime || (!isInProgress && !endTime)}
               onClick={() => void handleSave()}
-              className="min-h-touch-target rounded-md bg-interactive-primary px-ds-16 text-label font-[550] text-text-inverse disabled:bg-surface-subtle disabled:text-text-disabled"
+              className="flex min-h-touch-target items-center gap-ds-8 rounded-md bg-interactive-primary px-ds-16 text-label font-[550] text-text-inverse disabled:bg-surface-subtle disabled:text-text-disabled"
             >
-              {isSaving ? "Saving..." : activity ? "Save changes" : "Add activity"}
+              {isSaving && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
+              {isSaving ? "Saving..." : activity ? "Save Activity" : "Add Activity"}
             </button>
           </div>
         </div>

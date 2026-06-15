@@ -1,12 +1,13 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, X, Clock3 } from "lucide-react";
 import { addMonths, eachDayOfInterval, endOfMonth, format, isSameDay, startOfMonth, subMonths } from "date-fns";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import CategoryBadge from "@/components/activity/CategoryBadge";
 import ActivityEditor from "@/components/activity/ActivityEditor";
-import { toDateKey } from "@/lib/utils";
+import { calculateAnalytics } from "@/lib/analytics/calculate";
+import { formatDuration, formatTimeRange, toDateKey } from "@/lib/utils";
 import type { ActivityView } from "@/types";
 
 type CalendarViewProps = {
@@ -23,8 +24,19 @@ export default function CalendarView({
   const [month, setMonth] = useState(startOfMonth(new Date()));
   const [selectedActivity, setSelectedActivity] = useState<ActivityView | null>(null);
   const [createDate, setCreateDate] = useState<Date | null>(null);
+  const [selectedDayDetails, setSelectedDayDetails] = useState<Date | null>(null);
   const days = eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) });
   const leading = Array.from({ length: startOfMonth(month).getDay() });
+
+  const monthAnalytics = useMemo(() => calculateAnalytics(activities.filter(a => {
+    const d = new Date(a.startTime);
+    return d.getMonth() === month.getMonth() && d.getFullYear() === month.getFullYear();
+  }), 31), [activities, month]);
+
+  const todayAnalytics = useMemo(() => calculateAnalytics(activities.filter(a => isSameDay(new Date(a.startTime), new Date())), 1), [activities]);
+
+  const topMonthCategory = monthAnalytics.categoryBreakdown[0];
+  const topTodayCategory = todayAnalytics.categoryBreakdown[0];
 
   return (
     <section className="rounded-lg border border-border bg-surface p-ds-16">
@@ -55,6 +67,22 @@ export default function CalendarView({
           >
             <ChevronRight size={18} aria-hidden="true" />
           </button>
+        </div>
+      </div>
+      <div className="mt-ds-20 flex flex-col gap-ds-12 sm:flex-row">
+        <div className="flex-1 rounded-md border border-border bg-surface-subtle p-ds-12">
+          <p className="text-label font-[550] text-text-primary">Today</p>
+          <p className="mt-ds-4 text-caption text-text-muted">
+            You tracked {formatDuration(todayAnalytics.totalTrackedSeconds)} today. 
+            {topTodayCategory && ` Most of your time was spent on ${topTodayCategory.name}.`}
+          </p>
+        </div>
+        <div className="flex-1 rounded-md border border-border bg-surface-subtle p-ds-12">
+          <p className="text-label font-[550] text-text-primary">This Month</p>
+          <p className="mt-ds-4 text-caption text-text-muted">
+            This month you tracked {formatDuration(monthAnalytics.totalTrackedSeconds)}. 
+            {topMonthCategory && ` You spent ${formatDuration(topMonthCategory.seconds)} on ${topMonthCategory.name}.`}
+          </p>
         </div>
       </div>
       <div className="mt-ds-20 grid grid-cols-7 gap-ds-4 text-center text-caption text-text-muted">
@@ -99,7 +127,13 @@ export default function CalendarView({
                   </button>
                 ))}
                 {dayActivities.length > 2 && (
-                  <span className="text-caption text-text-muted">+{dayActivities.length - 2} more</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDayDetails(day)}
+                    className="min-h-touch-target rounded-sm px-ds-4 text-left hover:bg-surface-hover text-caption text-text-muted font-[550]"
+                  >
+                    +{dayActivities.length - 2} more
+                  </button>
                 )}
               </span>
             </div>
@@ -121,6 +155,66 @@ export default function CalendarView({
         }}
         onSaved={onChanged}
       />
+      {selectedDayDetails && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/60 p-ds-16 backdrop-blur-sm sm:items-center"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setSelectedDayDetails(null);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="day-details-title"
+            className="max-h-full w-full max-w-lg overflow-y-auto rounded-xl bg-surface-elevated p-ds-20 shadow-xl animate-in"
+          >
+            <div className="flex items-center justify-between gap-ds-12 border-b border-border pb-ds-16">
+              <div>
+                <h2 id="day-details-title" className="text-heading-3 font-semibold text-text-primary">
+                  {format(selectedDayDetails, "EEEE, MMMM d")}
+                </h2>
+                <p className="mt-ds-4 text-body-sm text-text-muted">
+                  {activities.filter((a) => toDateKey(new Date(a.startTime)) === toDateKey(selectedDayDetails)).length} activities logged
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close day details"
+                className="flex size-touch-target items-center justify-center rounded-md text-text-muted hover:bg-surface-hover"
+                onClick={() => setSelectedDayDetails(null)}
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
+            <div className="mt-ds-16 flex flex-col gap-ds-12">
+              {activities
+                .filter((a) => toDateKey(new Date(a.startTime)) === toDateKey(selectedDayDetails))
+                .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+                .map((activity) => (
+                  <article key={activity.id} className="rounded-lg border border-border p-ds-12">
+                    <div className="flex items-start justify-between gap-ds-8">
+                      <p className="text-label font-[550] text-text-primary">{activity.title}</p>
+                      <span className="text-caption tabular-nums text-text-secondary">
+                        {formatDuration(activity.duration)}
+                      </span>
+                    </div>
+                    <div className="mt-ds-8 flex items-center gap-ds-8">
+                      <CategoryBadge categoryKey={activity.categoryKey} compact />
+                      <span className="flex items-center gap-ds-4 text-caption text-text-muted">
+                        <Clock3 size={12} aria-hidden="true" />
+                        {formatTimeRange(activity.startTime, activity.endTime)}
+                      </span>
+                    </div>
+                    {activity.notes && (
+                      <p className="mt-ds-8 text-body-sm text-text-secondary">{activity.notes}</p>
+                    )}
+                  </article>
+                ))}
+            </div>
+          </section>
+        </div>
+      )}
     </section>
   );
 }

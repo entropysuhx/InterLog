@@ -1,7 +1,14 @@
+import { Manrope } from "next/font/google";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import "@/design-system/styles.css";
+
+const manrope = Manrope({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-sans",
+});
 
 export const metadata: Metadata = {
   title: { default: "InterLog", template: "%s · InterLog" },
@@ -18,11 +25,11 @@ try {
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en" data-theme="light" suppressHydrationWarning>
+    <html lang="en" data-theme="light" className={manrope.variable} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body>{children}</body>
+      <body className="font-sans antialiased">{children}</body>
     </html>
   );
 }

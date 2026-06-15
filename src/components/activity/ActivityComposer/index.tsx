@@ -29,7 +29,7 @@ export default function ActivityComposer({
             <input
               value={focusTitle}
               onChange={(event) => setFocusTitle(event.target.value)}
-              placeholder="What will you focus on?"
+              placeholder="What did you spend time on? e.g. Deep work, Learning React, Exercise, Team meeting"
               className="min-w-0 flex-1 bg-transparent text-body-sm text-text-primary outline-none placeholder:text-text-muted"
             />
           </label>
@@ -53,7 +53,7 @@ export default function ActivityComposer({
           </div>
         </div>
         <p className="mt-ds-8 text-caption text-text-muted">
-          Manual entries ask for start and end time. Activity titles may be processed by AI only when category suggestion is selected.
+          Track what you&apos;re doing now or log something you&apos;ve already completed.
         </p>
       </section>
       <ActivityEditor
