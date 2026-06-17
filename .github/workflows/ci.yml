@@ -22,6 +22,7 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/interlog_test
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/interlog_test
       AUTH_SECRET: ci-only-secret-with-at-least-sixteen-characters
       NEXT_PUBLIC_APP_URL: http://localhost:3000
     steps:
