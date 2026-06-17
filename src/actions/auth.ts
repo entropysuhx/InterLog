@@ -4,11 +4,15 @@ import { createHash, randomBytes } from "node:crypto";
 
 import { z } from "zod";
 
-import { sendPasswordResetEmail } from "@/lib/auth/email";
+import { sendPasswordResetEmail, sendVerificationEmail } from "@/lib/auth/email";
 import { hashPassword } from "@/lib/auth/password";
 import { prisma } from "@/lib/db";
-import { consumeRateLimit } from "@/lib/rate-limit";
+import { consumeRateLimit, getRateLimitStatus } from "@/lib/rate-limit";
 import type { ActionResult } from "@/types";
+
+const TOKEN_TTL_MS = 15 * 60 * 1000;
+const LOGIN_LIMIT = 5;
+const LOGIN_WINDOW_SECONDS = 15 * 60;
 
 const RegisterSchema = z
   .object({
@@ -26,27 +30,49 @@ function tokenHash(token: string): string {
 
 export async function registerWithPassword(
   input: z.infer<typeof RegisterSchema>,
-): Promise<ActionResult<{ verificationRequired: false }>> {
+): Promise<ActionResult<{ verificationRequired: true; email: string }>> {
   const parsed = RegisterSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "Check your registration details." };
   const email = parsed.data.email.toLowerCase();
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) return { success: false, error: "An account already exists for this email." };
   const passwordHash = await hashPassword(parsed.data.password);
-  await prisma.$transaction(async (transaction) => {
-    const user = await transaction.user.create({
-      data: {
-        name: parsed.data.name,
-        email,
-        // TODO: Re-enable email verification after Resend/Nodemailer setup.
-        emailVerified: new Date(),
-        credential: { create: { passwordHash } },
-        preference: { create: {} },
-      },
+  const token = randomBytes(32).toString("hex");
+  let createdUserId: string | null = null;
+  try {
+    const user = await prisma.$transaction(async (transaction) => {
+      const createdUser = await transaction.user.create({
+        data: {
+          name: parsed.data.name,
+          email,
+          credential: { create: { passwordHash } },
+          preference: { create: {} },
+        },
+      });
+      await transaction.verificationToken.create({
+        data: {
+          identifier: `verify:${email}`,
+          token: tokenHash(token),
+          expires: new Date(Date.now() + TOKEN_TTL_MS),
+        },
+      });
+      return createdUser;
     });
-    return user;
-  });
-  return { success: true, data: { verificationRequired: false } };
+    createdUserId = user.id;
+    await sendVerificationEmail(email, token);
+  } catch (error) {
+    console.error("Failed to create account verification email", error);
+    if (createdUserId) {
+      await prisma.$transaction([
+        prisma.verificationToken.deleteMany({ where: { identifier: `verify:${email}` } }),
+        prisma.user.delete({ where: { id: createdUserId } }),
+      ]).catch((cleanupError) => {
+        console.error("Failed to clean up unverified account after email error", cleanupError);
+      });
+    }
+    return { success: false, error: "We couldn't send the email right now. Please try again." };
+  }
+  return { success: true, data: { verificationRequired: true, email } };
 }
 
 export async function verifyEmail(input: {
@@ -65,7 +91,7 @@ export async function verifyEmail(input: {
     },
   });
   if (!verification || verification.expires < new Date()) {
-    return { success: false, error: "This verification link has expired." };
+    return { success: false, error: "This verification code has expired. Please request a new one." };
   }
   await prisma.$transaction([
     prisma.user.update({ where: { email }, data: { emailVerified: new Date() } }),
@@ -78,6 +104,43 @@ export async function verifyEmail(input: {
   return { success: true, data: undefined };
 }
 
+export async function resendVerificationEmail(input: { email: string }): Promise<ActionResult<void>> {
+  const parsed = EmailSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: "Enter a valid email address." };
+  const email = parsed.data.email.toLowerCase();
+  const limit = await consumeRateLimit(email, "verification-email", 3, 15 * 60);
+  if (!limit.allowed) {
+    return { success: false, error: "Please wait before requesting another verification email." };
+  }
+  const user = await prisma.user.findUnique({ where: { email }, include: { credential: true } });
+  if (!user?.credential) return { success: true, data: undefined };
+  if (user.emailVerified) return { success: true, data: undefined };
+
+  const token = randomBytes(32).toString("hex");
+  await prisma.$transaction([
+    prisma.verificationToken.deleteMany({ where: { identifier: `verify:${email}` } }),
+    prisma.verificationToken.create({
+      data: {
+        identifier: `verify:${email}`,
+        token: tokenHash(token),
+        expires: new Date(Date.now() + TOKEN_TTL_MS),
+      },
+    }),
+  ]);
+  try {
+    await sendVerificationEmail(email, token);
+  } catch (error) {
+    console.error("Failed to resend verification email", error);
+    await prisma.verificationToken.deleteMany({ where: { identifier: `verify:${email}` } }).catch(
+      (cleanupError) => {
+        console.error("Failed to clean up verification token after email error", cleanupError);
+      },
+    );
+    return { success: false, error: "We couldn't send the email right now. Please try again." };
+  }
+  return { success: true, data: undefined };
+}
+
 export async function requestPasswordReset(input: { email: string }): Promise<ActionResult<void>> {
   const parsed = EmailSchema.safeParse(input);
   if (!parsed.success) return { success: true, data: undefined };
@@ -87,14 +150,28 @@ export async function requestPasswordReset(input: { email: string }): Promise<Ac
   const user = await prisma.user.findUnique({ where: { email }, include: { credential: true } });
   if (user?.credential) {
     const token = randomBytes(32).toString("hex");
-    await prisma.verificationToken.create({
+    const verification = await prisma.verificationToken.create({
       data: {
         identifier: `reset:${email}`,
         token: tokenHash(token),
-        expires: new Date(Date.now() + 60 * 60 * 1000),
+        expires: new Date(Date.now() + TOKEN_TTL_MS),
       },
     });
-    await sendPasswordResetEmail(email, token);
+    try {
+      await sendPasswordResetEmail(email, token);
+    } catch (error) {
+      console.error("Failed to send password reset email", error);
+      await prisma.verificationToken
+        .delete({
+          where: {
+            identifier_token: { identifier: verification.identifier, token: verification.token },
+          },
+        })
+        .catch((cleanupError) => {
+          console.error("Failed to clean up password reset token after email error", cleanupError);
+        });
+      return { success: false, error: "We couldn't send the email right now. Please try again." };
+    }
   }
   return { success: true, data: undefined };
 }
@@ -120,7 +197,7 @@ export async function resetPassword(input: {
     },
   });
   if (!verification || verification.expires < new Date()) {
-    return { success: false, error: "This reset link has expired." };
+    return { success: false, error: "This reset link has expired. Please request a new one." };
   }
   await prisma.$transaction([
     prisma.credential.update({
@@ -133,5 +210,16 @@ export async function resetPassword(input: {
       },
     }),
   ]);
+  return { success: true, data: undefined };
+}
+
+export async function checkLoginRateLimit(input: { email: string }): Promise<ActionResult<void>> {
+  const parsed = EmailSchema.safeParse(input);
+  if (!parsed.success) return { success: true, data: undefined };
+  const email = parsed.data.email.toLowerCase();
+  const status = await getRateLimitStatus(email, "login", LOGIN_LIMIT, LOGIN_WINDOW_SECONDS);
+  if (!status.allowed) {
+    return { success: false, error: "Too many login attempts. Please try again in 15 minutes." };
+  }
   return { success: true, data: undefined };
 }

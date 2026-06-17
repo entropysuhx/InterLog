@@ -7,6 +7,7 @@ import { z } from "zod";
 import { env } from "@/env";
 import { verifyPassword } from "@/lib/auth/password";
 import { prisma } from "@/lib/db";
+import { consumeRateLimit, getRateLimitStatus, resetRateLimit } from "@/lib/rate-limit";
 
 const LoginSchema = z.object({
   email: z.string().email(),
@@ -22,14 +23,25 @@ const providers: NextAuthConfig["providers"] = [
     async authorize(credentials) {
       const parsed = LoginSchema.safeParse(credentials);
       if (!parsed.success) return null;
+      const email = parsed.data.email.toLowerCase();
+      const status = await getRateLimitStatus(email, "login", 5, 15 * 60);
+      if (!status.allowed) return null;
       const user = await prisma.user.findUnique({
-        where: { email: parsed.data.email.toLowerCase() },
+        where: { email },
         include: { credential: true },
       });
-      // TODO: Re-enable email verification after Resend/Nodemailer setup.
-      if (!user?.credential) return null;
+      if (!user?.credential) {
+        await consumeRateLimit(email, "login", 5, 15 * 60);
+        return null;
+      }
+      if (!user.emailVerified) return null;
       const valid = await verifyPassword(parsed.data.password, user.credential.passwordHash);
-      return valid ? { id: user.id, email: user.email, name: user.name } : null;
+      if (!valid) {
+        await consumeRateLimit(email, "login", 5, 15 * 60);
+        return null;
+      }
+      await resetRateLimit(email, "login");
+      return { id: user.id, email: user.email, name: user.name };
     },
   }),
 ];
@@ -39,6 +51,7 @@ if (env.AUTH_GOOGLE_ID && env.AUTH_GOOGLE_SECRET) {
     Google({
       clientId: env.AUTH_GOOGLE_ID,
       clientSecret: env.AUTH_GOOGLE_SECRET,
+      allowDangerousEmailAccountLinking: true,
     }),
   );
 }

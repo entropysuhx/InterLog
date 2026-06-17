@@ -31,3 +31,29 @@ export async function consumeRateLimit(
   };
 }
 
+export async function getRateLimitStatus(
+  key: string,
+  action: string,
+  limit: number,
+  windowSeconds: number,
+): Promise<RateLimitResult> {
+  const now = new Date();
+  const windowStart = new Date(
+    Math.floor(now.getTime() / (windowSeconds * 1000)) * windowSeconds * 1000,
+  );
+  const expiresAt = new Date(windowStart.getTime() + windowSeconds * 1000);
+  const event = await prisma.rateLimitEvent.findUnique({
+    where: { key_action_windowStart: { key, action, windowStart } },
+  });
+  const count = event?.count ?? 0;
+
+  return {
+    allowed: count <= limit,
+    remaining: Math.max(0, limit - count),
+    retryAfterSeconds: Math.max(1, Math.ceil((expiresAt.getTime() - now.getTime()) / 1000)),
+  };
+}
+
+export async function resetRateLimit(key: string, action: string): Promise<void> {
+  await prisma.rateLimitEvent.deleteMany({ where: { key, action } });
+}

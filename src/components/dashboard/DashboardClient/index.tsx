@@ -26,9 +26,8 @@ export default function DashboardClient() {
     refresh,
   } = useProductData();
   const today = toDateKey(new Date());
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  const firstName = userName?.split(" ")[0] ?? "there";
+  const firstName = userName?.trim().split(" ")[0];
+  const welcomeCopy = firstName ? `Welcome back, ${firstName} 👋` : "Welcome back 👋";
   const todayActivities = activities.filter(
     (activity) => toDateKey(new Date(activity.startTime)) === today,
   );
@@ -50,7 +49,7 @@ export default function DashboardClient() {
           {new Date().toLocaleDateString(undefined, { dateStyle: "full" })}
         </p>
         <h1 className="mt-ds-4 text-heading-2 font-[650] text-text-primary">
-          {greeting}, {firstName}
+          {welcomeCopy}
         </h1>
         <p className="mt-ds-4 text-body-sm text-text-secondary">
           What are you going to track today?
