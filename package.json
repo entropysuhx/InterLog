@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
+    "test:e2e": "node scripts/run-e2e.mjs",
     "test:contrast": "vitest run tests/unit/design-system/contrast.test.ts",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
