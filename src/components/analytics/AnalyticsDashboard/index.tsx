@@ -2,7 +2,8 @@
 
 import { BarChart3, Brain, Clock3, NotebookPen } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useMemo } from "react";
+import { endOfDay, endOfMonth, startOfDay, startOfMonth, subDays } from "date-fns";
+import { useMemo, useState } from "react";
 
 import { calculateAnalytics } from "@/lib/analytics/calculate";
 import { formatDuration } from "@/lib/utils";
@@ -34,9 +35,21 @@ export default function AnalyticsDashboard({
   activities,
   reflectionDays,
 }: AnalyticsDashboardProps) {
+  const [period, setPeriod] = useState<"weekly" | "monthly">("weekly");
+  const now = useMemo(() => new Date(), []);
+  const periodActivities = useMemo(() => {
+    const start = period === "weekly" ? startOfDay(subDays(now, 6)) : startOfMonth(now);
+    const end = period === "weekly" ? endOfDay(now) : endOfMonth(now);
+    return activities.filter((activity) => {
+      const activityTime = new Date(activity.startTime);
+      return activityTime >= start && activityTime <= end;
+    });
+  }, [activities, now, period]);
+  const trendDays = period === "weekly" ? 7 : endOfMonth(now).getDate();
+  const trendEnd = period === "weekly" ? now : endOfMonth(now);
   const snapshot = useMemo(
-    () => calculateAnalytics(activities),
-    [activities],
+    () => calculateAnalytics(periodActivities, trendDays, trendEnd),
+    [periodActivities, trendDays, trendEnd],
   );
   const cards = [
     { label: "Tracked", value: formatDuration(snapshot.totalTrackedSeconds), icon: Clock3 },
@@ -68,9 +81,35 @@ export default function AnalyticsDashboard({
       </div>
       <div className="grid gap-ds-20 xl:grid-cols-2">
         <article className="rounded-lg border border-border bg-surface p-ds-20">
-          <h2 className="text-heading-4 font-semibold text-text-primary">Weekly Time Tracked</h2>
-          <p className="mt-ds-4 text-body-sm text-text-muted">Tracked time across the last seven days.</p>
-          <TrendChart data={snapshot.dailyTrend} />
+          <div className="flex flex-col gap-ds-12 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-heading-4 font-semibold text-text-primary">
+                {period === "weekly" ? "Weekly Time Tracked" : "Monthly Time Tracked"}
+              </h2>
+              <p className="mt-ds-4 text-body-sm text-text-muted">
+                {period === "weekly"
+                  ? "Tracked time across the last seven days."
+                  : "Tracked time across the current month."}
+              </p>
+            </div>
+            <div className="flex rounded-md border border-border bg-surface p-ds-4">
+              {(["weekly", "monthly"] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setPeriod(option)}
+                  className={
+                    period === option
+                      ? "rounded-sm bg-surface-active px-ds-12 py-ds-4 text-label font-[550] text-text-primary"
+                      : "rounded-sm px-ds-12 py-ds-4 text-label text-text-secondary hover:bg-surface-hover"
+                  }
+                >
+                  {option === "weekly" ? "Weekly" : "Monthly"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <TrendChart data={snapshot.dailyTrend} period={period} />
         </article>
         <article className="rounded-lg border border-border bg-surface p-ds-20">
           <h2 className="text-heading-4 font-semibold text-text-primary">Category balance</h2>
@@ -95,19 +134,27 @@ export default function AnalyticsDashboard({
               );
             })}
             {snapshot.categoryBreakdown.length === 0 && (
-              <p className="text-body-sm text-text-muted">Category patterns will appear after you log time.</p>
+              <p className="text-body-sm text-text-muted">
+                Category patterns will appear after you log time.
+              </p>
             )}
           </div>
         </article>
       </div>
       <table className="sr-only">
-        <caption>Weekly tracked time</caption>
+        <caption>{period === "weekly" ? "Weekly tracked time" : "Monthly tracked time"}</caption>
         <thead>
-          <tr><th>Date</th><th>Seconds tracked</th></tr>
+          <tr>
+            <th>Date</th>
+            <th>Seconds tracked</th>
+          </tr>
         </thead>
         <tbody>
           {snapshot.dailyTrend.map((day) => (
-            <tr key={day.date}><td>{day.date}</td><td>{day.seconds}</td></tr>
+            <tr key={day.date}>
+              <td>{day.date}</td>
+              <td>{day.seconds}</td>
+            </tr>
           ))}
         </tbody>
       </table>

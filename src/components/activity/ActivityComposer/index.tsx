@@ -1,6 +1,6 @@
 "use client";
 
-import { Play, Plus, Sparkles } from "lucide-react";
+import { NotebookPen, Play, Plus } from "lucide-react";
 import { useState } from "react";
 
 import ActivityEditor from "@/components/activity/ActivityEditor";
@@ -21,10 +21,13 @@ export default function ActivityComposer({
 
   return (
     <>
-      <section className="rounded-lg border border-border bg-surface p-ds-12" aria-label="Activity actions">
+      <section
+        className="rounded-lg border border-border bg-surface p-ds-12"
+        aria-label="Activity actions"
+      >
         <div className="flex flex-col gap-ds-12 xl:flex-row">
           <label className="flex min-h-touch-target flex-1 items-center gap-ds-12 rounded-md border border-border px-ds-12 focus-within:border-border-active">
-            <Sparkles className="text-interactive-primary" size={18} aria-hidden="true" />
+            <NotebookPen className="text-interactive-primary" size={18} aria-hidden="true" />
             <span className="sr-only">Focus session title</span>
             <input
               value={focusTitle}
@@ -36,19 +39,19 @@ export default function ActivityComposer({
           <div className="flex gap-ds-8">
             <button
               type="button"
-              onClick={() => void onStartFocus(focusTitle.trim() || "Focus session")}
-              className="flex min-h-touch-target flex-1 items-center justify-center gap-ds-8 rounded-md bg-interactive-primary px-ds-16 text-label font-[550] text-text-inverse hover:bg-interactive-primary-hover xl:flex-none"
-            >
-              <Play size={16} aria-hidden="true" />
-              Start Focus
-            </button>
-            <button
-              type="button"
               onClick={() => setIsEditorOpen(true)}
-              className="flex min-h-touch-target flex-1 items-center justify-center gap-ds-8 rounded-md border border-border bg-interactive-secondary px-ds-16 text-label text-text-primary hover:bg-interactive-secondary-hover xl:flex-none"
+              className="flex min-h-touch-target flex-1 items-center justify-center gap-ds-8 rounded-md bg-interactive-primary px-ds-16 text-label font-[550] text-text-inverse hover:bg-interactive-primary-hover xl:flex-none"
             >
               <Plus size={16} aria-hidden="true" />
               Add Activity
+            </button>
+            <button
+              type="button"
+              onClick={() => void onStartFocus(focusTitle.trim() || "Focus session")}
+              className="flex min-h-touch-target flex-1 items-center justify-center gap-ds-8 rounded-md border border-border bg-interactive-secondary px-ds-16 text-label text-text-primary hover:bg-interactive-secondary-hover xl:flex-none"
+            >
+              <Play size={16} aria-hidden="true" />
+              Start Focus
             </button>
           </div>
         </div>
@@ -59,6 +62,7 @@ export default function ActivityComposer({
       <ActivityEditor
         isOpen={isEditorOpen}
         isAuthenticated={isAuthenticated}
+        initialTitle={focusTitle.trim() || undefined}
         onClose={() => setIsEditorOpen(false)}
         onSaved={onActivityCreated}
       />

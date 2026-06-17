@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { generateInsights } from "@/actions/insight";
@@ -29,6 +30,32 @@ export default function AnalyticsPage() {
       setInsightStatus(result.success ? "" : result.error);
     });
   }, [isAuthenticated, refresh]);
+
+  if (isReady && !isAuthenticated) {
+    return (
+      <div className="mx-auto max-w-reading rounded-xl border border-border bg-surface p-ds-24">
+        <h1 className="text-heading-2 font-[650] text-text-primary">Sign in to unlock Insights</h1>
+        <p className="mt-ds-12 text-body-md text-text-secondary">
+          InterLog uses your saved time logs to generate reflections, patterns, and AI-powered insights.
+        </p>
+        <div className="mt-ds-24 flex flex-wrap gap-ds-12">
+          <Link
+            href="/login"
+            className="flex min-h-touch-target items-center rounded-md bg-interactive-primary px-ds-16 text-label font-[550] text-text-inverse hover:bg-interactive-primary-hover"
+          >
+            Sign In
+          </Link>
+          <Link
+            href="/dashboard"
+            className="flex min-h-touch-target items-center rounded-md border border-border px-ds-16 text-label text-text-secondary hover:bg-surface-hover"
+          >
+            Back to Dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-ds-24">
       <header>

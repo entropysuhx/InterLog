@@ -21,8 +21,11 @@ export async function migrateLocalGuestData(): Promise<MigrationResult> {
     if (!result.success) return result;
     guestStore.clear();
     return { success: true, importedCount: result.data.importedCount };
-  } catch {
-    return { success: false, error: "Migration failed. Your data is still here." };
+  } catch (error) {
+    console.error("Guest migration request failed", error);
+    return {
+      success: false,
+      error: "We couldn't import your guest data right now. Your data is still here.",
+    };
   }
 }
-

@@ -22,16 +22,17 @@ export default function DashboardClient() {
     activeFocusSession,
     isAuthenticated,
     isReady,
+    userName,
     refresh,
   } = useProductData();
   const today = toDateKey(new Date());
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const firstName = userName?.split(" ")[0] ?? "there";
   const todayActivities = activities.filter(
     (activity) => toDateKey(new Date(activity.startTime)) === today,
   );
-  const analytics = useMemo(
-    () => calculateAnalytics(todayActivities, 1),
-    [todayActivities],
-  );
+  const analytics = useMemo(() => calculateAnalytics(todayActivities, 1), [todayActivities]);
   const stats = [
     { label: "Tracked", value: formatDuration(analytics.totalTrackedSeconds), icon: Clock3 },
     { label: "Focus", value: formatDuration(analytics.focusSeconds), icon: Brain },
@@ -45,21 +46,32 @@ export default function DashboardClient() {
   return (
     <div className="space-y-ds-20">
       <header>
-        <p className="text-body-sm text-text-muted">{new Date().toLocaleDateString(undefined, { dateStyle: "full" })}</p>
-        <h1 className="mt-ds-4 text-heading-2 font-[650] text-text-primary">Good to see you.</h1>
-        <p className="mt-ds-4 text-body-sm text-text-secondary">Notice your time, then decide what it means.</p>
+        <p className="text-body-sm text-text-muted">
+          {new Date().toLocaleDateString(undefined, { dateStyle: "full" })}
+        </p>
+        <h1 className="mt-ds-4 text-heading-2 font-[650] text-text-primary">
+          {greeting}, {firstName}
+        </h1>
+        <p className="mt-ds-4 text-body-sm text-text-secondary">
+          What are you going to track today?
+        </p>
       </header>
       {!isAuthenticated && <RegistrationPrompt />}
       <div className="dashboard-grid gap-ds-12">
         {stats.map((stat) => {
           const Icon = stat.icon;
           return (
-            <article key={stat.label} className="col-span-12 rounded-lg border border-border bg-surface p-ds-20 sm:col-span-4">
+            <article
+              key={stat.label}
+              className="col-span-12 rounded-lg border border-border bg-surface p-ds-20 sm:col-span-4"
+            >
               <div className="flex items-center gap-ds-8 text-label text-text-muted">
                 <Icon size={18} className="text-interactive-primary" aria-hidden="true" />
                 {stat.label}
               </div>
-              <p className="mt-ds-8 text-heading-2 font-[650] tabular-nums text-text-primary">{stat.value}</p>
+              <p className="mt-ds-8 text-heading-2 font-[650] tabular-nums text-text-primary">
+                {stat.value}
+              </p>
             </article>
           );
         })}
@@ -109,7 +121,9 @@ export default function DashboardClient() {
                 ? `${Math.round((analytics.focusSeconds / Math.max(1, analytics.totalTrackedSeconds)) * 100)}% of your tracked time was deep work.`
                 : "Log a few activities and a useful pattern will appear here."}
             </p>
-            <p className="mt-ds-12 text-caption text-text-muted">Based only on activity timing and categories.</p>
+            <p className="mt-ds-12 text-caption text-text-muted">
+              Based only on activity timing and categories.
+            </p>
           </article>
         </div>
       </div>

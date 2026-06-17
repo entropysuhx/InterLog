@@ -7,4 +7,5 @@ export type AppShellProps = {
   initialSnapshot: ProductSnapshot | null;
   isAuthenticated: boolean;
   userName: string | null;
+  userImage: string | null;
 };

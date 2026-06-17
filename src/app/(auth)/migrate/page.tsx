@@ -1,17 +1,10 @@
-import Link from "next/link";
+import MigrationGate from "@/components/auth/MigrationGate";
+import { auth } from "@/lib/auth";
 
-import AuthCard from "@/components/auth/AuthCard";
-import MigrationPrompt from "@/components/auth/MigrationPrompt";
+export default async function MigratePage() {
+  const session = await auth();
+  const accountId = session?.user?.id ?? "guest";
+  const accountEmail = session?.user?.email?.toLowerCase() ?? null;
 
-export default function MigratePage() {
-  return (
-    <AuthCard
-      title="Bring your guest history with you"
-      description="You stay in control of what is added to your account."
-      footer={<Link href="/dashboard" className="text-interactive-primary">Continue without importing</Link>}
-    >
-      <MigrationPrompt />
-    </AuthCard>
-  );
+  return <MigrationGate accountId={accountId} accountEmail={accountEmail} />;
 }
-

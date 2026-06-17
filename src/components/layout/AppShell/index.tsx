@@ -3,6 +3,7 @@
 import {
   BarChart3,
   CalendarDays,
+  ChevronDown,
   Clock3,
   Home,
   LayoutDashboard,
@@ -18,7 +19,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { AppShellProps } from "@/components/layout/AppShell/AppShell.types";
 import ProductDataProvider from "@/components/providers/ProductDataProvider";
@@ -38,10 +39,13 @@ export default function AppShell({
   initialSnapshot,
   isAuthenticated,
   userName,
+  userImage,
 }: AppShellProps) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark" | "focus">("light");
+  const accountMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("interlog:theme");
@@ -57,8 +61,38 @@ export default function AppShell({
     document.documentElement.dataset.theme = next;
   }
 
+  useEffect(() => {
+    setIsAccountMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!isAccountMenuOpen) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      if (
+        accountMenuRef.current &&
+        event.target instanceof Node &&
+        !accountMenuRef.current.contains(event.target)
+      ) {
+        setIsAccountMenuOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsAccountMenuOpen(false);
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isAccountMenuOpen]);
+
   const ThemeIcon = theme === "light" ? Sun : theme === "dark" ? Moon : Target;
-  const themeLabel = theme === "focus" ? "Focus Theme" : theme === "dark" ? "Dark Theme" : "Light Theme";
+  const themeLabel =
+    theme === "focus" ? "Focus Theme" : theme === "dark" ? "Dark Theme" : "Light Theme";
 
   return (
     <div className="app-shell-grid bg-background">
@@ -81,13 +115,14 @@ export default function AppShell({
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-modal flex w-shell-sidebar flex-col border-r border-border bg-surface p-ds-16 transition-transform lg:sticky lg:top-0 lg:z-base lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-modal flex h-dvh w-shell-sidebar flex-col border-r border-border bg-surface p-ds-16 transition-transform lg:sticky lg:top-0 lg:z-base lg:translate-x-0",
           isOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
         <Link
-          href="/dashboard"
+          href="/"
           className="flex min-h-touch-target items-center gap-ds-12 text-heading-4 font-semibold text-text-primary"
+          onClick={() => setIsOpen(false)}
         >
           <span className="flex size-ds-32 items-center justify-center rounded-md bg-interactive-primary text-text-inverse">
             <Clock3 size={18} aria-hidden="true" />
@@ -118,7 +153,7 @@ export default function AppShell({
           })}
         </nav>
 
-        <div className="mt-auto space-y-ds-12">
+        <div className="mt-auto shrink-0 space-y-ds-12 pt-ds-16">
           <div className="rounded-lg border border-border bg-surface-subtle p-ds-16">
             <p className="flex items-center gap-ds-8 text-label font-[550] text-text-primary">
               <Sparkles size={16} aria-hidden="true" />
@@ -130,13 +165,27 @@ export default function AppShell({
           </div>
           <Link
             href="/settings"
+            onClick={() => setIsOpen(false)}
             className="flex min-h-touch-target items-center gap-ds-12 rounded-md px-ds-12 text-label text-text-secondary hover:bg-surface-hover"
           >
             <Settings size={18} aria-hidden="true" />
             Settings
           </Link>
+          {isAuthenticated && (
+            <div className="flex min-h-touch-target items-center gap-ds-12 rounded-md bg-surface-subtle px-ds-12 text-label text-text-primary">
+              {userImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={userImage} alt="" className="size-ds-32 rounded-full object-cover" />
+              ) : (
+                <span className="flex size-ds-32 items-center justify-center rounded-full bg-interactive-primary text-text-inverse">
+                  {(userName ?? "U").slice(0, 1).toUpperCase()}
+                </span>
+              )}
+              <span className="min-w-0 truncate">{userName ?? "Signed in"}</span>
+            </div>
+          )}
           <div className="border-t border-border pt-ds-12 text-caption text-text-muted">
-            {isAuthenticated ? userName ?? "Signed in" : "Guest mode · Stored on this device"}
+            {isAuthenticated ? "Synced to your account" : "Guest mode / Stored on this device"}
           </div>
         </div>
       </aside>
@@ -153,33 +202,90 @@ export default function AppShell({
             <span className="hidden sm:inline">{themeLabel}</span>
           </button>
           {isAuthenticated ? (
-            <button
-              type="button"
-              className="flex min-h-touch-target items-center rounded-md border border-border bg-surface px-ds-16 text-label font-[550] text-text-secondary hover:bg-surface-hover"
-              onClick={() => void signOut({ callbackUrl: "/dashboard" })}
-            >
-              Sign out
-            </button>
+            <div ref={accountMenuRef} className="relative">
+              <button
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={isAccountMenuOpen}
+                className="flex min-h-touch-target items-center gap-ds-8 rounded-md border border-border bg-surface px-ds-12 text-label font-[550] text-text-secondary hover:bg-surface-hover"
+                onClick={() => setIsAccountMenuOpen((value) => !value)}
+              >
+                {userImage ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={userImage} alt="" className="size-ds-24 rounded-full object-cover" />
+                ) : (
+                  <span className="flex size-ds-24 items-center justify-center rounded-full bg-interactive-primary text-caption text-text-inverse">
+                    {(userName ?? "U").slice(0, 1).toUpperCase()}
+                  </span>
+                )}
+                <span className="hidden max-w-panel-sm truncate sm:inline">
+                  {userName ?? "Account"}
+                </span>
+                <ChevronDown size={16} aria-hidden="true" />
+              </button>
+              {isAccountMenuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 mt-ds-8 w-panel-sm rounded-lg border border-border bg-surface-elevated p-ds-8 shadow-lg"
+                >
+                  <Link
+                    href="/settings"
+                    role="menuitem"
+                    onClick={() => setIsAccountMenuOpen(false)}
+                    className="flex min-h-touch-target items-center rounded-md px-ds-12 text-label text-text-secondary hover:bg-surface-hover"
+                  >
+                    Account settings
+                  </Link>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex min-h-touch-target w-full items-center rounded-md px-ds-12 text-left text-label text-text-secondary hover:bg-surface-hover"
+                    onClick={() => {
+                      setIsAccountMenuOpen(false);
+                      void signOut({ callbackUrl: "/dashboard" });
+                    }}
+                  >
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
           ) : (
-            <Link
-              href="/login"
-              className="flex min-h-touch-target items-center rounded-md bg-interactive-primary px-ds-16 text-label font-[550] text-text-inverse hover:bg-interactive-primary-hover"
-            >
-              Save progress
-            </Link>
+            <>
+              <Link
+                href="/login"
+                className="flex min-h-touch-target items-center rounded-md border border-border bg-interactive-secondary px-ds-16 text-label font-[550] text-text-secondary hover:bg-interactive-secondary-hover"
+              >
+                Login
+              </Link>
+              <Link
+                href="/login"
+                className="flex min-h-touch-target items-center rounded-md bg-interactive-primary px-ds-16 text-label font-[550] text-text-inverse hover:bg-interactive-primary-hover"
+              >
+                Save Progress
+              </Link>
+            </>
           )}
         </header>
         <ProductDataProvider
           initialSnapshot={initialSnapshot}
           isAuthenticated={isAuthenticated}
+          userName={userName}
+          userImage={userImage}
         >
           <main className="mx-auto mt-shell-topbar flex-1 w-full max-w-content p-ds-16 md:p-ds-24 lg:p-ds-32 min-h-[calc(100vh-var(--spacing-shell-topbar)-60px)]">
             {children}
           </main>
           <footer className="mx-auto w-full max-w-content px-ds-16 md:px-ds-24 lg:px-ds-32 pb-ds-24 flex justify-end gap-ds-16 text-caption text-text-muted">
-            <Link href="/" className="hover:text-text-primary">About InterLog</Link>
-            <Link href="#" className="hover:text-text-primary">Terms & Conditions</Link>
-            <Link href="#" className="hover:text-text-primary">Privacy Policy</Link>
+            <Link href="/" className="hover:text-text-primary">
+              About InterLog
+            </Link>
+            <Link href="#" className="hover:text-text-primary">
+              Terms & Conditions
+            </Link>
+            <Link href="#" className="hover:text-text-primary">
+              Privacy Policy
+            </Link>
           </footer>
         </ProductDataProvider>
       </div>

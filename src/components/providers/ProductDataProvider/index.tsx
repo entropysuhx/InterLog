@@ -9,6 +9,8 @@ import { CATEGORY_NAMES, type ActivityView, type ProductSnapshot } from "@/types
 type ProductDataContextValue = ProductSnapshot & {
   isAuthenticated: boolean;
   isReady: boolean;
+  userName: string | null;
+  userImage: string | null;
   refresh: () => void;
 };
 
@@ -18,10 +20,14 @@ export default function ProductDataProvider({
   children,
   initialSnapshot,
   isAuthenticated,
+  userName,
+  userImage,
 }: {
   children: React.ReactNode;
   initialSnapshot: ProductSnapshot | null;
   isAuthenticated: boolean;
+  userName: string | null;
+  userImage: string | null;
 }) {
   const router = useRouter();
   const guest = useGuest();
@@ -44,6 +50,8 @@ export default function ProductDataProvider({
           ...initialSnapshot,
           isAuthenticated: true,
           isReady: true,
+          userName,
+          userImage,
           refresh: () => router.refresh(),
         }
       : {
@@ -60,6 +68,8 @@ export default function ProductDataProvider({
           })),
           isAuthenticated: false,
           isReady: guest.isHydrated,
+          userName: null,
+          userImage: null,
           refresh: guest.refresh,
         };
 

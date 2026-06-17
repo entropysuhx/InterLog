@@ -5,10 +5,15 @@ import { useEffect, useRef, useState } from "react";
 
 import { cancelFocusSession, completeFocusSession } from "@/actions/focus";
 import CategoryBadge from "@/components/activity/CategoryBadge";
+import ModalShell from "@/components/layout/ModalShell";
 import { guestStore } from "@/lib/guest/store";
-import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { formatTimerDuration } from "@/lib/utils";
-import { CATEGORY_KEYS, type CategoryKey, type FocusSessionView, type GuestFocusSession } from "@/types";
+import {
+  CATEGORY_KEYS,
+  type CategoryKey,
+  type FocusSessionView,
+  type GuestFocusSession,
+} from "@/types";
 
 type FocusTimerProps = {
   session: GuestFocusSession | FocusSessionView;
@@ -31,14 +36,13 @@ export default function FocusTimer({
   const [status, setStatus] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const dialogRef = useRef<HTMLElement>(null);
-
-  useDialogFocus(Boolean(stoppedAt), dialogRef, () => setStoppedAt(null));
 
   useEffect(() => {
     if (stoppedAt) return;
     const interval = window.setInterval(() => {
-      setElapsed(Math.max(0, Math.floor((Date.now() - new Date(session.startTime).getTime()) / 1000)));
+      setElapsed(
+        Math.max(0, Math.floor((Date.now() - new Date(session.startTime).getTime()) / 1000)),
+      );
     }, 1000);
     return () => window.clearInterval(interval);
   }, [session.startTime, stoppedAt]);
@@ -85,11 +89,18 @@ export default function FocusTimer({
 
   return (
     <>
-      <section className="rounded-xl border border-border-active bg-surface p-ds-20" aria-label="Active focus session">
+      <section
+        className="rounded-xl border border-border-active bg-surface p-ds-20"
+        aria-label="Active focus session"
+      >
         <div className="flex flex-col gap-ds-16 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-caption font-[550] uppercase text-interactive-primary">Focus in progress</p>
-            <h2 className="mt-ds-4 text-heading-4 font-semibold text-text-primary">{session.title}</h2>
+            <p className="text-caption font-[550] uppercase text-interactive-primary">
+              Focus in progress
+            </p>
+            <h2 className="mt-ds-4 text-heading-4 font-semibold text-text-primary">
+              {session.title}
+            </h2>
           </div>
           <div className="text-display-m font-[650] tabular-nums text-text-primary" aria-live="off">
             {formatTimerDuration(elapsed)}
@@ -121,101 +132,112 @@ export default function FocusTimer({
             </button>
           </div>
         </div>
-        <p className="sr-only" aria-live="polite">{stoppedAt ? "Focus timer stopped. Review before saving." : ""}</p>
+        <p className="sr-only" aria-live="polite">
+          {stoppedAt ? "Focus timer stopped. Review before saving." : ""}
+        </p>
       </section>
 
       {stoppedAt && (
-        <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/60 p-ds-16 backdrop-blur-sm sm:items-center">
-          <section
-            ref={dialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="focus-summary-title"
-            className="max-h-full w-full max-w-xl overflow-y-auto rounded-xl bg-surface-elevated p-ds-20 shadow-xl animate-in"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 id="focus-summary-title" className="text-heading-3 font-semibold text-text-primary">
-                  Review Focus Activity
-                </h3>
-                <p className="mt-ds-4 text-body-sm text-text-muted">
-                  Nothing is saved until you confirm.
-                </p>
-              </div>
-              <button
-                ref={closeButtonRef}
-                type="button"
-                aria-label="Resume focus timer"
-                className="flex size-touch-target items-center justify-center rounded-md text-text-muted hover:bg-surface-hover"
-                onClick={() => setStoppedAt(null)}
+        <ModalShell titleId="focus-summary-title" onClose={() => setStoppedAt(null)} size="form">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3
+                id="focus-summary-title"
+                className="text-heading-3 font-semibold text-text-primary"
               >
-                <X size={18} aria-hidden="true" />
-              </button>
-            </div>
-            <div className="mt-ds-20 space-y-ds-16">
-              <label className="block">
-                <span className="mb-ds-8 block text-label font-[550] text-text-secondary">Activity title</span>
-                <input
-                  value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  className="min-h-touch-target w-full rounded-md border border-border bg-background px-ds-12 text-body-sm text-text-primary"
-                />
-              </label>
-              <fieldset>
-                <legend className="text-label font-[550] text-text-secondary">Category</legend>
-                <div className="mt-ds-8 flex flex-wrap gap-ds-8">
-                  {CATEGORY_KEYS.map((key) => (
-                    <button
-                      key={key}
-                      type="button"
-                      aria-pressed={categoryKey === key}
-                      onClick={() => setCategoryKey(key)}
-                      className={
-                        categoryKey === key
-                          ? "min-h-touch-target rounded-full outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 transition-all"
-                          : "min-h-touch-target rounded-full opacity-60 transition-opacity hover:opacity-100 outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2"
-                      }
-                    >
-                      <CategoryBadge categoryKey={key} selected={categoryKey === key} />
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
-              <label className="block">
-                <span className="mb-ds-8 block text-label font-[550] text-text-secondary">
-                  Notes <span className="text-caption text-text-muted">(optional)</span>
-                </span>
-                <textarea
-                  value={notes}
-                  onChange={(event) => setNotes(event.target.value)}
-                  rows={3}
-                  className="w-full resize-y rounded-md border border-border bg-background p-ds-12 text-body-sm text-text-primary"
-                />
-              </label>
-              <p className="text-caption tabular-nums text-text-muted">
-                Duration: {formatTimerDuration(Math.max(0, Math.floor((new Date(stoppedAt).getTime() - new Date(session.startTime).getTime()) / 1000)))}
+                Review Focus Activity
+              </h3>
+              <p className="mt-ds-4 text-body-sm text-text-muted">
+                Nothing is saved until you confirm.
               </p>
             </div>
-            {status && <p role="status" className="mt-ds-12 text-body-sm text-status-error">{status}</p>}
-            <div className="mt-ds-20 flex justify-end gap-ds-8">
-              <button
-                type="button"
-                onClick={() => setStoppedAt(null)}
-                className="min-h-touch-target rounded-md border border-border px-ds-16 text-label text-text-secondary"
-              >
-                Resume Timer
-              </button>
-              <button
-                type="button"
-                disabled={isSaving || !title.trim()}
-                onClick={() => void handleConfirm()}
-                className="min-h-touch-target rounded-md bg-interactive-primary px-ds-16 text-label font-[550] text-text-inverse disabled:bg-surface-subtle disabled:text-text-disabled"
-              >
-                {isSaving ? "Saving..." : "Save Progress"}
-              </button>
-            </div>
-          </section>
-        </div>
+            <button
+              ref={closeButtonRef}
+              type="button"
+              aria-label="Resume focus timer"
+              className="flex size-touch-target items-center justify-center rounded-md text-text-muted hover:bg-surface-hover"
+              onClick={() => setStoppedAt(null)}
+            >
+              <X size={18} aria-hidden="true" />
+            </button>
+          </div>
+          <div className="mt-ds-20 space-y-ds-16">
+            <label className="block">
+              <span className="mb-ds-8 block text-label font-[550] text-text-secondary">
+                Activity title
+              </span>
+              <input
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                className="min-h-touch-target w-full rounded-md border border-border bg-background px-ds-12 text-body-sm text-text-primary"
+              />
+            </label>
+            <fieldset>
+              <legend className="text-label font-[550] text-text-secondary">Category</legend>
+              <div className="mt-ds-8 flex flex-wrap gap-ds-8">
+                {CATEGORY_KEYS.map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={categoryKey === key}
+                    onClick={() => setCategoryKey(key)}
+                    className={
+                      categoryKey === key
+                        ? "min-h-touch-target rounded-full outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 transition-all"
+                        : "min-h-touch-target rounded-full opacity-60 transition-opacity hover:opacity-100 outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2"
+                    }
+                  >
+                    <CategoryBadge categoryKey={key} selected={categoryKey === key} />
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <label className="block">
+              <span className="mb-ds-8 block text-label font-[550] text-text-secondary">
+                Notes <span className="text-caption text-text-muted">(optional)</span>
+              </span>
+              <textarea
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                rows={3}
+                className="w-full resize-y rounded-md border border-border bg-background p-ds-12 text-body-sm text-text-primary"
+              />
+            </label>
+            <p className="text-caption tabular-nums text-text-muted">
+              Duration:{" "}
+              {formatTimerDuration(
+                Math.max(
+                  0,
+                  Math.floor(
+                    (new Date(stoppedAt).getTime() - new Date(session.startTime).getTime()) / 1000,
+                  ),
+                ),
+              )}
+            </p>
+          </div>
+          {status && (
+            <p role="status" className="mt-ds-12 text-body-sm text-status-error">
+              {status}
+            </p>
+          )}
+          <div className="mt-ds-20 flex justify-end gap-ds-8">
+            <button
+              type="button"
+              onClick={() => setStoppedAt(null)}
+              className="min-h-touch-target rounded-md border border-border px-ds-16 text-label text-text-secondary"
+            >
+              Resume Timer
+            </button>
+            <button
+              type="button"
+              disabled={isSaving || !title.trim()}
+              onClick={() => void handleConfirm()}
+              className="min-h-touch-target rounded-md bg-interactive-primary px-ds-16 text-label font-[550] text-text-inverse disabled:bg-surface-subtle disabled:text-text-disabled"
+            >
+              {isSaving ? "Saving..." : "Save Progress"}
+            </button>
+          </div>
+        </ModalShell>
       )}
     </>
   );

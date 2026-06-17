@@ -22,6 +22,7 @@ const KEYS = {
   reflections: "interlog:reflections:v1",
   focusSessions: "interlog:focus-sessions:v1",
   draftPrefix: "interlog:reflection-draft:",
+  migrationSkippedPrefix: "interlog:migration-skipped:",
   promptDismissedAt: "interlog:registration-prompt-dismissed-at",
 } as const;
 
@@ -29,7 +30,10 @@ function hasStorage(): boolean {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
 
-function readCollection<T>(key: string, parser: { safeParse: (value: unknown) => { success: boolean; data?: T } }): T[] {
+function readCollection<T>(
+  key: string,
+  parser: { safeParse: (value: unknown) => { success: boolean; data?: T } },
+): T[] {
   if (!hasStorage()) return [];
   try {
     const parsed = JSON.parse(window.localStorage.getItem(key) ?? "[]") as unknown;
@@ -74,7 +78,9 @@ export const guestStore = {
     return readCollection(KEYS.activities, GuestActivitySchema);
   },
   getActivitiesByDate(date: string): GuestActivity[] {
-    return this.getActivities().filter((activity) => toDateKey(new Date(activity.startTime)) === date);
+    return this.getActivities().filter(
+      (activity) => toDateKey(new Date(activity.startTime)) === date,
+    );
   },
   createActivity(input: {
     title: string;
@@ -98,14 +104,19 @@ export const guestStore = {
     writeCollection(KEYS.activities, [...this.getActivities(), activity]);
     return activity;
   },
-  updateActivity(id: string, patch: Partial<Omit<GuestActivity, "id" | "guestId" | "createdAt">>): GuestActivity | null {
+  updateActivity(
+    id: string,
+    patch: Partial<Omit<GuestActivity, "id" | "guestId" | "createdAt">>,
+  ): GuestActivity | null {
     let updated: GuestActivity | null = null;
     const activities = this.getActivities().map((activity) => {
       if (activity.id !== id) return activity;
       const candidate = { ...activity, ...patch, updatedAt: new Date().toISOString() };
       updated = {
         ...candidate,
-        duration: candidate.endTime ? calculateDuration(candidate.startTime, candidate.endTime) : null,
+        duration: candidate.endTime
+          ? calculateDuration(candidate.startTime, candidate.endTime)
+          : null,
       };
       return updated;
     });
@@ -124,10 +135,15 @@ export const guestStore = {
   getReflectionsByDate(date: string): GuestReflection[] {
     return this.getReflections().filter((reflection) => reflection.activityDate === date);
   },
-  saveReflections(activityDate: string, answers: { prompt: string; answer: string }[]): GuestReflection[] {
+  saveReflections(
+    activityDate: string,
+    answers: { prompt: string; answer: string }[],
+  ): GuestReflection[] {
     const guestId = getGuestId();
     const now = new Date().toISOString();
-    const others = this.getReflections().filter((reflection) => reflection.activityDate !== activityDate);
+    const others = this.getReflections().filter(
+      (reflection) => reflection.activityDate !== activityDate,
+    );
     const records = answers.map((answer) => ({
       id: createLocalId("reflection"),
       guestId,
@@ -203,12 +219,15 @@ export const guestStore = {
     return this.getFocusSessions().find((session) => session.status === "ACTIVE") ?? null;
   },
   saveReflectionDraft(date: string, value: unknown): void {
-    if (hasStorage()) window.localStorage.setItem(`${KEYS.draftPrefix}${date}`, JSON.stringify(value));
+    if (hasStorage())
+      window.localStorage.setItem(`${KEYS.draftPrefix}${date}`, JSON.stringify(value));
   },
   getReflectionDraft<T>(date: string): T | null {
     if (!hasStorage()) return null;
     try {
-      return JSON.parse(window.localStorage.getItem(`${KEYS.draftPrefix}${date}`) ?? "null") as T | null;
+      return JSON.parse(
+        window.localStorage.getItem(`${KEYS.draftPrefix}${date}`) ?? "null",
+      ) as T | null;
     } catch {
       return null;
     }
@@ -225,6 +244,29 @@ export const guestStore = {
   },
   dismissRegistrationPrompt(): void {
     if (hasStorage()) window.localStorage.setItem(KEYS.promptDismissedAt, new Date().toISOString());
+  },
+  hasMigrationData(): boolean {
+    return (
+      this.getActivities().length + this.getReflections().length + this.getFocusSessions().length >
+      0
+    );
+  },
+  hasSkippedMigration(accountId: string): boolean {
+    if (!hasStorage()) return false;
+    return window.localStorage.getItem(`${KEYS.migrationSkippedPrefix}${accountId}`) === "true";
+  },
+  skipMigration(accountId: string): void {
+    if (hasStorage())
+      window.localStorage.setItem(`${KEYS.migrationSkippedPrefix}${accountId}`, "true");
+  },
+  hasSkippedMigrationForAny(accountIds: string[]): boolean {
+    return accountIds.some((accountId) => this.hasSkippedMigration(accountId));
+  },
+  skipMigrationForAll(accountIds: string[]): void {
+    accountIds.forEach((accountId) => this.skipMigration(accountId));
+  },
+  clearMigrationSkip(accountId: string): void {
+    if (hasStorage()) window.localStorage.removeItem(`${KEYS.migrationSkippedPrefix}${accountId}`);
   },
   export(): GuestDataExport {
     return {

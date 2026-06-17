@@ -15,6 +15,31 @@ const UpdatePreferencesSchema = z
   })
   .strict();
 
+const UpdateProfileSchema = z
+  .object({
+    name: z.string().trim().min(1).max(100),
+    image: z.string().max(750000).nullable(),
+  })
+  .strict();
+
+export async function updateProfile(
+  input: z.infer<typeof UpdateProfileSchema>,
+): Promise<ActionResult<{ name: string | null; image: string | null }>> {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized." };
+  const parsed = UpdateProfileSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: "Check your profile details." };
+  const user = await prisma.user.update({
+    where: { id: session.user.id },
+    data: {
+      name: parsed.data.name,
+      image: parsed.data.image,
+    },
+    select: { name: true, image: true },
+  });
+  return { success: true, data: user };
+}
+
 export async function updatePreferences(
   input: z.infer<typeof UpdatePreferencesSchema>,
 ): Promise<ActionResult<void>> {
@@ -43,4 +68,3 @@ export async function deleteAccount(): Promise<ActionResult<void>> {
   await signOut({ redirect: false });
   return { success: true, data: undefined };
 }
-

@@ -26,9 +26,10 @@ const providers: NextAuthConfig["providers"] = [
         where: { email: parsed.data.email.toLowerCase() },
         include: { credential: true },
       });
-      if (!user?.credential || !user.emailVerified) return null;
+      // TODO: Re-enable email verification after Resend/Nodemailer setup.
+      if (!user?.credential) return null;
       const valid = await verifyPassword(parsed.data.password, user.credential.passwordHash);
-      return valid ? { id: user.id, email: user.email, name: user.name, image: user.image } : null;
+      return valid ? { id: user.id, email: user.email, name: user.name } : null;
     },
   }),
 ];
@@ -50,6 +51,7 @@ export const authConfig: NextAuthConfig = {
   callbacks: {
     async jwt({ token, user, account }) {
       if (user?.id) token.id = user.id;
+      delete token.picture;
       if (account?.provider === "google" && user?.id) {
         await prisma.user.update({
           where: { id: user.id },
@@ -66,4 +68,3 @@ export const authConfig: NextAuthConfig = {
 };
 
 export const { handlers, auth, signIn, signOut } = NextAuth(authConfig);
-

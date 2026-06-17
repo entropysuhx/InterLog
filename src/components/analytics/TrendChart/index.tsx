@@ -1,15 +1,24 @@
 "use client";
 
 import { format } from "date-fns";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 type TrendChartProps = {
   data: { date: string; seconds: number }[];
+  period?: "weekly" | "monthly";
 };
 
-export default function TrendChart({ data }: TrendChartProps) {
+export default function TrendChart({ data, period = "weekly" }: TrendChartProps) {
   const chartData = data.map((item) => ({
-    day: format(new Date(item.date), "EEE"),
+    day: format(new Date(item.date), period === "weekly" ? "EEE" : "d MMM"),
     hours: Number((item.seconds / 3600).toFixed(1)),
   }));
   return (
@@ -17,7 +26,12 @@ export default function TrendChart({ data }: TrendChartProps) {
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={chartData}>
           <CartesianGrid stroke="var(--ds-border)" vertical={false} />
-          <XAxis dataKey="day" stroke="var(--ds-text-muted)" fontSize={12} />
+          <XAxis
+            dataKey="day"
+            stroke="var(--ds-text-muted)"
+            fontSize={12}
+            interval={period === "weekly" ? 0 : 4}
+          />
           <YAxis stroke="var(--ds-text-muted)" fontSize={12} />
           <Tooltip
             contentStyle={{

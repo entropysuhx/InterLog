@@ -3,6 +3,8 @@
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 
+import { guestStore } from "@/lib/guest/store";
+
 export default function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -14,11 +16,14 @@ export default function LoginForm() {
     setIsLoading(true);
     const result = await signIn("credentials", { email, password, redirect: false });
     if (result?.error) {
-      setError("Check your email, password, and verification status.");
+      setError("Check your email and password.");
       setIsLoading(false);
       return;
     }
-    window.location.assign("/migrate");
+    const normalizedEmail = email.trim().toLowerCase();
+    const shouldOfferMigration =
+      guestStore.hasMigrationData() && !guestStore.hasSkippedMigration(normalizedEmail);
+    window.location.assign(shouldOfferMigration ? "/migrate" : "/dashboard");
   }
 
   return (
@@ -45,7 +50,11 @@ export default function LoginForm() {
           className="mt-ds-8 min-h-touch-target w-full rounded-md border border-border bg-background px-ds-12 text-body-sm text-text-primary"
         />
       </label>
-      {error && <p role="alert" className="text-body-sm text-status-error">{error}</p>}
+      {error && (
+        <p role="alert" className="text-body-sm text-status-error">
+          {error}
+        </p>
+      )}
       <button
         type="submit"
         disabled={isLoading}
@@ -63,4 +72,3 @@ export default function LoginForm() {
     </form>
   );
 }
-

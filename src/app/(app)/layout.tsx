@@ -10,6 +10,7 @@ export default async function ProductLayout({ children }: { children: ReactNode 
       initialSnapshot={viewer.snapshot}
       isAuthenticated={viewer.isAuthenticated}
       userName={viewer.userName}
+      userImage={viewer.userImage}
     >
       {children}
     </AppShell>

@@ -6,37 +6,44 @@ import type { ProductSnapshot } from "@/types";
 export async function getProductSnapshot(): Promise<{
   isAuthenticated: boolean;
   userName: string | null;
+  userImage: string | null;
   snapshot: ProductSnapshot | null;
 }> {
   const session = await auth();
   const userId = session?.user?.id;
-  if (!userId) return { isAuthenticated: false, userName: null, snapshot: null };
+  if (!userId) return { isAuthenticated: false, userName: null, userImage: null, snapshot: null };
 
-  const [activities, activeFocusSession, reflectionDays, insights, reflections] = await Promise.all([
-    prisma.activity.findMany({
-      where: { userId },
-      include: { category: true },
-      orderBy: { startTime: "asc" },
-    }),
-    prisma.focusSession.findFirst({
-      where: { userId, status: "ACTIVE" },
-      orderBy: { startTime: "desc" },
-    }),
-    prisma.reflectionDay.count({ where: { userId, status: "COMPLETED" } }),
-    prisma.insight.findMany({
-      where: { userId, dismissedAt: null },
-      orderBy: { createdAt: "desc" },
-      take: 4,
-    }),
-    prisma.reflection.findMany({
-      where: { userId },
-      orderBy: { updatedAt: "desc" },
-    }),
-  ]);
+  const [user, activities, activeFocusSession, reflectionDays, insights, reflections] =
+    await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true, email: true, image: true },
+      }),
+      prisma.activity.findMany({
+        where: { userId },
+        include: { category: true },
+        orderBy: { startTime: "asc" },
+      }),
+      prisma.focusSession.findFirst({
+        where: { userId, status: "ACTIVE" },
+        orderBy: { startTime: "desc" },
+      }),
+      prisma.reflectionDay.count({ where: { userId, status: "COMPLETED" } }),
+      prisma.insight.findMany({
+        where: { userId, dismissedAt: null },
+        orderBy: { createdAt: "desc" },
+        take: 4,
+      }),
+      prisma.reflection.findMany({
+        where: { userId },
+        orderBy: { updatedAt: "desc" },
+      }),
+    ]);
 
   return {
     isAuthenticated: true,
-    userName: session.user.name ?? session.user.email ?? null,
+    userName: user?.name ?? user?.email ?? session.user.name ?? session.user.email ?? null,
+    userImage: user?.image ?? session.user.image ?? null,
     snapshot: {
       activities: activities.map(toActivityView),
       activeFocusSession: activeFocusSession

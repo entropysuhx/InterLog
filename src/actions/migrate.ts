@@ -31,7 +31,10 @@ export async function migrateGuestData(
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Unauthorized." };
   const parsed = MigrateGuestDataSchema.safeParse(input);
-  if (!parsed.success) return { success: false, error: "Guest data could not be validated." };
+  if (!parsed.success) {
+    console.error("Guest migration validation failed", parsed.error.flatten());
+    return { success: false, error: "We couldn't import your guest data right now." };
+  }
   const existing = await prisma.guestMigration.findUnique({
     where: { idempotencyKey: parsed.data.idempotencyKey },
   });
@@ -42,6 +45,7 @@ export async function migrateGuestData(
     };
   }
   try {
+    const activityIds = new Set(parsed.data.activities.map((activity) => activity.id));
     const importedCount = await prisma.$transaction(async (transaction) => {
       const activities = await transaction.activity.createMany({
         data: parsed.data.activities.map((activity) => ({
@@ -75,7 +79,8 @@ export async function migrateGuestData(
         data: parsed.data.focusSessions.map((focus) => ({
           id: focus.id,
           userId: session.user.id,
-          activityId: focus.activityId,
+          activityId:
+            focus.activityId && activityIds.has(focus.activityId) ? focus.activityId : null,
           title: focus.title,
           startTime: new Date(focus.startTime),
           endTime: focus.endTime ? new Date(focus.endTime) : null,
@@ -96,8 +101,8 @@ export async function migrateGuestData(
       return count;
     });
     return { success: true, data: { importedCount, alreadyImported: false } };
-  } catch {
-    return { success: false, error: "Migration failed. Your data is still here." };
+  } catch (error) {
+    console.error("Guest migration failed", error);
+    return { success: false, error: "We couldn't import your guest data right now." };
   }
 }
-

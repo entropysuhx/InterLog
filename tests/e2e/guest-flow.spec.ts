@@ -33,8 +33,23 @@ test("calendar shows activity titles and opens the editor", async ({ page }) => 
   await expect(page.getByRole("dialog", { name: "Edit Activity" })).toBeVisible();
 });
 
+test("weekly and monthly timeline rows show logged activity details", async ({ page }) => {
+  await createLearningActivity(page);
+  await page.goto("/timeline");
+
+  await page.getByRole("button", { name: "Weekly" }).click();
+  await page.getByRole("button", { name: /1 activities/ }).click();
+  await expect(page.getByRole("dialog", { name: /,/ }).getByText("Study TypeScript")).toBeVisible();
+  await page.getByRole("button", { name: "Close timeline details" }).click();
+
+  await page.getByRole("button", { name: "Monthly" }).click();
+  await page.getByRole("button", { name: /1 activities/ }).click();
+  await expect(page.getByRole("dialog", { name: /,/ }).getByText("Study TypeScript")).toBeVisible();
+});
+
 test("reflection switches to saved journal mode", async ({ page }) => {
   await page.goto("/reflection");
+  await page.getByRole("button", { name: "Start Reflection" }).click();
   await page.getByPlaceholder("Write what comes to mind...").first().fill("I made space for focused work.");
   await page.getByRole("button", { name: "Save reflection" }).click();
   await expect(page.getByText("I made space for focused work.")).toBeVisible();
