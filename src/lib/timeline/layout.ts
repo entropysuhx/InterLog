@@ -52,15 +52,23 @@ export function getGaps(activities: ActivityView[]): TimelineGap[] {
 
 export function getBlockMetrics(
   activity: ActivityView,
-  dayStartHour = 6,
+  dayStartHour = 0,
   hourHeight = 80,
 ): { top: number; height: number } {
   const start = new Date(activity.startTime);
+  const end = activity.endTime ? new Date(activity.endTime) : null;
+  const dayEnd = new Date(start);
+  dayEnd.setHours(24, 0, 0, 0);
+  const visibleEnd = end && end > dayEnd ? dayEnd : end;
   const startMinutes = (start.getHours() - dayStartHour) * 60 + start.getMinutes();
-  const durationMinutes = activity.duration ? activity.duration / 60 : 30;
+  const durationMinutes = visibleEnd
+    ? Math.max(1, (visibleEnd.getTime() - start.getTime()) / 60000)
+    : 30;
+  const rawTop = (startMinutes / 60) * hourHeight;
+  const dayEndTop = (24 - dayStartHour) * hourHeight;
+  const height = Math.max(36, (durationMinutes / 60) * hourHeight);
   return {
-    top: (startMinutes / 60) * hourHeight,
-    height: Math.max(36, (durationMinutes / 60) * hourHeight),
+    top: Math.max(0, Math.min(rawTop, dayEndTop - height)),
+    height: Math.min(height, dayEndTop),
   };
 }
-

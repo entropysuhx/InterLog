@@ -40,14 +40,15 @@ export default function TimelineView({
   );
   const laneActivities = useMemo(() => assignLanes(dayActivities), [dayActivities]);
   const gaps = useMemo(() => getGaps(dayActivities), [dayActivities]);
-  const hours = Array.from({ length: 19 }, (_, index) => index + 6); // 6 AM → midnight
+  const timelineStartHour = 0;
+  const hours = Array.from({ length: 25 - timelineStartHour }, (_, index) => index + timelineStartHour);
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(new Date()), 60000);
     return () => window.clearInterval(interval);
   }, []);
 
-  const nowTop = ((now.getHours() - 6) * 60 + now.getMinutes()) * (80 / 60);
+  const nowTop = ((now.getHours() - timelineStartHour) * 60 + now.getMinutes()) * (80 / 60);
 
   return (
     <section id="timeline-view" className="rounded-lg border border-border bg-surface p-ds-12">
@@ -66,7 +67,11 @@ export default function TimelineView({
               className="flex min-h-touch-target items-center gap-ds-8 rounded-md bg-interactive-primary px-ds-12 text-label text-text-inverse"
               onClick={() => {
                 const end = new Date();
-                const start = new Date(end.getTime() - 30 * 60 * 1000);
+                const startCandidate = new Date(end.getTime() - 30 * 60 * 1000);
+                const start =
+                  toDateKey(startCandidate) === toDateKey(end)
+                    ? startCandidate
+                    : new Date(end.getFullYear(), end.getMonth(), end.getDate());
                 setCreateRange({ start: start.toISOString(), end: end.toISOString() });
               }}
             >
@@ -82,7 +87,7 @@ export default function TimelineView({
             <span
               key={hour}
               className="absolute right-ds-8 text-caption tabular-nums text-text-muted"
-              style={{ top: (hour - 6) * 80 - 7 }}
+              style={{ top: (hour - timelineStartHour) * 80 - 7 }}
             >
               {new Date(2020, 0, 1, hour).toLocaleTimeString([], { hour: "numeric" })}
             </span>
@@ -96,10 +101,12 @@ export default function TimelineView({
             <div
               key={hour}
               className="absolute left-0 right-0 border-t border-border"
-              style={{ top: (hour - 6) * 80 }}
+              style={{ top: (hour - timelineStartHour) * 80 }}
             />
           ))}
-          {dateKey === toDateKey(new Date()) && nowTop >= 0 && nowTop <= 1280 && (
+          {dateKey === toDateKey(new Date()) &&
+            nowTop >= 0 &&
+            nowTop <= (24 - timelineStartHour) * 80 && (
             <div className="pointer-events-none absolute left-0 right-0 z-raised border-t-2 border-border-active" style={{ top: nowTop }}>
               <span className="absolute -top-ds-8 left-ds-4 rounded-full bg-interactive-primary px-ds-4 text-caption tabular-nums text-text-inverse">
                 {now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
@@ -116,6 +123,7 @@ export default function TimelineView({
                 endTime: gap.endTime,
                 duration: gap.durationMinutes * 60,
               } as ActivityView,
+              timelineStartHour,
             );
             return (
               <button
@@ -135,7 +143,7 @@ export default function TimelineView({
             );
           })}
           {laneActivities.map((activity) => {
-            const metrics = getBlockMetrics(activity);
+            const metrics = getBlockMetrics(activity, timelineStartHour);
             return (
               <TimelineItem
                 key={activity.id}

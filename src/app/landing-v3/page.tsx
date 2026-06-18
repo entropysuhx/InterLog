@@ -189,7 +189,7 @@ function FeatureSpotlight({
   );
 }
 
-export default function LandingPage() {
+export default function LandingV3Page() {
   const heroRef = useRef<HTMLDivElement>(null);
   const shouldReduceMotion = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ["start start", "end start"] });

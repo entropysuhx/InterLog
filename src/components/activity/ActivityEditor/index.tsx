@@ -7,6 +7,7 @@ import { createActivity, deleteActivity, updateActivity } from "@/actions/activi
 import CategoryBadge from "@/components/activity/CategoryBadge";
 import ModalShell from "@/components/layout/ModalShell";
 import { guestStore } from "@/lib/guest/store";
+import { toDateKey } from "@/lib/utils";
 import { CATEGORY_KEYS, type ActivityView, type CategoryKey } from "@/types";
 
 type ActivityEditorProps = {
@@ -53,7 +54,11 @@ export default function ActivityEditor({
   useEffect(() => {
     if (!isOpen) return;
     const now = new Date();
-    const defaultStart = new Date(now.getTime() - 30 * 60 * 1000);
+    const defaultStartCandidate = new Date(now.getTime() - 30 * 60 * 1000);
+    const defaultStart =
+      toDateKey(defaultStartCandidate) === toDateKey(now)
+        ? defaultStartCandidate
+        : new Date(now.getFullYear(), now.getMonth(), now.getDate());
     setTitle(activity?.title ?? initialTitle ?? "");
     setStartTime(toLocalInput(activity?.startTime ?? initialStartTime ?? defaultStart));
     setEndTime(toLocalInput(activity?.endTime ?? initialEndTime ?? now));

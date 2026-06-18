@@ -2,7 +2,7 @@ import { Pencil } from "lucide-react";
 
 import CategoryBadge from "@/components/activity/CategoryBadge";
 import type { TimelineItemProps } from "@/components/timeline/TimelineItem/TimelineItem.types";
-import { cn, formatDuration, formatTimeRange } from "@/lib/utils";
+import { cn, formatDuration, formatTimeRange, toDateKey } from "@/lib/utils";
 import type { CategoryKey } from "@/types";
 
 const categoryStyles: Record<CategoryKey, string> = {
@@ -21,6 +21,9 @@ export default function TimelineItem({ activity, top, height, onEdit }: Timeline
   const lanes = Math.min(activity.totalLanes, 3);
   const width = activity.totalLanes > 3 ? 100 : 100 / lanes;
   const left = activity.totalLanes > 3 ? 0 : width * activity.laneIndex;
+  const continuesTomorrow =
+    activity.endTime !== null &&
+    toDateKey(new Date(activity.startTime)) !== toDateKey(new Date(activity.endTime));
   return (
     <article
       role="article"
@@ -84,6 +87,11 @@ export default function TimelineItem({ activity, top, height, onEdit }: Timeline
       </div>
       {activity.endTime === null && (
         <span className="mt-ds-4 text-caption font-[550] text-text-secondary">In progress</span>
+      )}
+      {continuesTomorrow && (
+        <span className="mt-ds-4 text-caption font-[550] text-text-secondary">
+          Continues into next day
+        </span>
       )}
     </article>
   );

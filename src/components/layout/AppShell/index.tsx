@@ -16,6 +16,7 @@ import {
   Target,
   X,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -121,13 +122,11 @@ export default function AppShell({
       >
         <Link
           href="/"
-          className="flex min-h-touch-target items-center gap-ds-12 text-heading-4 font-semibold text-text-primary"
+          className="flex min-h-touch-target items-center gap-ds-12 text-heading-4 font-semibold leading-none text-text-primary"
           onClick={() => setIsOpen(false)}
         >
-          <span className="flex size-ds-32 items-center justify-center rounded-md bg-interactive-primary text-text-inverse">
-            <Clock3 size={18} aria-hidden="true" />
-          </span>
-          InterLog
+          <Image src="/interlog.svg" alt="" width={30} height={27} className="block h-ds-24 w-auto shrink-0" />
+          <span className="leading-none">InterLog</span>
         </Link>
 
         <nav className="mt-ds-32 flex flex-col gap-ds-4" aria-label="Primary navigation">

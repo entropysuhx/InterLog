@@ -28,8 +28,13 @@ export function formatTimerDuration(seconds: number): string {
 }
 
 export function formatTimeRange(startTime: string, endTime: string | null): string {
-  const start = format(new Date(startTime), "h:mm a");
-  return endTime ? `${start} - ${format(new Date(endTime), "h:mm a")}` : `${start} - now`;
+  const startDate = new Date(startTime);
+  const endDate = endTime ? new Date(endTime) : null;
+  const start = format(startDate, "h:mm a");
+  if (!endDate) return `${start} - now`;
+
+  const nextDayLabel = toDateKey(startDate) !== toDateKey(endDate) ? " (+1 day)" : "";
+  return `${start} - ${format(endDate, "h:mm a")}${nextDayLabel}`;
 }
 
 export function createLocalId(prefix: string): string {
