@@ -2,12 +2,12 @@
 
 import { BarChart3, Brain, Clock3, NotebookPen } from "lucide-react";
 import dynamic from "next/dynamic";
-import { endOfDay, endOfMonth, startOfDay, startOfMonth, subDays } from "date-fns";
+import { differenceInCalendarDays, endOfDay, endOfMonth, startOfWeek, startOfMonth } from "date-fns";
 import { useMemo, useState } from "react";
 
-import { calculateAnalytics } from "@/lib/analytics/calculate";
+import { calculateAnalytics, countReflectionDaysInRange } from "@/lib/analytics/calculate";
 import { formatDuration } from "@/lib/utils";
-import type { ActivityView } from "@/types";
+import type { ActivityView, ReflectionView } from "@/types";
 
 const chartStyles = {
   "deep-work": "bg-activity-deep-work-chart",
@@ -28,24 +28,33 @@ const TrendChart = dynamic(() => import("@/components/analytics/TrendChart"), {
 
 type AnalyticsDashboardProps = {
   activities: ActivityView[];
-  reflectionDays: number;
+  reflections: ReflectionView[];
+  weekStartsOn: 0 | 1;
 };
 
 export default function AnalyticsDashboard({
   activities,
-  reflectionDays,
+  reflections,
+  weekStartsOn,
 }: AnalyticsDashboardProps) {
   const [period, setPeriod] = useState<"weekly" | "monthly">("weekly");
   const now = useMemo(() => new Date(), []);
-  const periodActivities = useMemo(() => {
-    const start = period === "weekly" ? startOfDay(subDays(now, 6)) : startOfMonth(now);
+  const periodBounds = useMemo(() => {
+    const start = period === "weekly" ? startOfWeek(now, { weekStartsOn }) : startOfMonth(now);
     const end = period === "weekly" ? endOfDay(now) : endOfMonth(now);
+    return { start, end };
+  }, [now, period, weekStartsOn]);
+  const periodActivities = useMemo(() => {
     return activities.filter((activity) => {
       const activityTime = new Date(activity.startTime);
-      return activityTime >= start && activityTime <= end;
+      return activityTime >= periodBounds.start && activityTime <= periodBounds.end;
     });
-  }, [activities, now, period]);
-  const trendDays = period === "weekly" ? 7 : endOfMonth(now).getDate();
+  }, [activities, periodBounds]);
+  const reflectionDays = useMemo(
+    () => countReflectionDaysInRange(reflections, periodBounds.start, periodBounds.end),
+    [periodBounds, reflections],
+  );
+  const trendDays = period === "weekly" ? differenceInCalendarDays(now, periodBounds.start) + 1 : endOfMonth(now).getDate();
   const trendEnd = period === "weekly" ? now : endOfMonth(now);
   const snapshot = useMemo(
     () => calculateAnalytics(periodActivities, trendDays, trendEnd),

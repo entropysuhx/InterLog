@@ -55,3 +55,13 @@ export async function sendPasswordResetEmail(email: string, token: string): Prom
     html: `<p>A password reset was requested for your InterLog account.</p><p><a href="${url}">Reset password</a></p>`,
   });
 }
+
+export async function sendEmailChangeVerification(email: string, token: string): Promise<void> {
+  const url = `${env.NEXT_PUBLIC_APP_URL}/verify-email-change?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
+  await sendEmail({
+    to: email,
+    subject: "Confirm your new InterLog email address",
+    text: `Confirm this email address for your InterLog account: ${url}`,
+    html: `<p>Confirm this email address for your InterLog account.</p><p><a href="${url}">Confirm new email</a></p>`,
+  });
+}

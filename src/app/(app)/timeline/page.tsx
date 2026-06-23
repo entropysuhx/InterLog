@@ -4,10 +4,11 @@ import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   addDays,
+  eachDayOfInterval,
   endOfMonth,
   endOfWeek,
   format,
-  isWithinInterval,
+  startOfDay,
   startOfMonth,
   startOfWeek,
   subDays,
@@ -15,28 +16,24 @@ import {
 
 import { useProductData } from "@/components/providers/ProductDataProvider";
 import TimelineDetailDialog from "@/components/timeline/TimelineDetailDialog";
+import { getTimelineActivitiesForDate } from "@/lib/timeline/layout";
 import TimelineView from "@/components/timeline/TimelineView";
-import { formatDuration, toDateKey } from "@/lib/utils";
+import { formatDuration } from "@/lib/utils";
 import type { ActivityView } from "@/types";
 
-function groupActivitiesByDate(activityList: ActivityView[]) {
-  const grouped = activityList.reduce<
-    Record<string, { count: number; duration: number; date: Date; activities: ActivityView[] }>
-  >((acc, activity) => {
-    const dateKey = toDateKey(new Date(activity.startTime));
-    acc[dateKey] ??= {
-      count: 0,
-      duration: 0,
-      date: new Date(activity.startTime),
-      activities: [],
-    };
-    acc[dateKey].count += 1;
-    acc[dateKey].duration += activity.duration ?? 0;
-    acc[dateKey].activities.push(activity);
-    return acc;
-  }, {});
-
-  return Object.values(grouped).sort((a, b) => b.date.getTime() - a.date.getTime());
+function groupActivitiesByDate(activityList: ActivityView[], start: Date, end: Date) {
+  return eachDayOfInterval({ start, end })
+    .map((date) => {
+      const activities = getTimelineActivitiesForDate(activityList, date);
+      return {
+        count: activities.length,
+        duration: getTotalSeconds(activities),
+        date,
+        activities,
+      };
+    })
+    .filter((day) => day.count > 0)
+    .sort((a, b) => b.date.getTime() - a.date.getTime());
 }
 
 function getTotalSeconds(activities: ActivityView[]) {
@@ -44,8 +41,8 @@ function getTotalSeconds(activities: ActivityView[]) {
 }
 
 export default function TimelinePage() {
-  const { activities, isAuthenticated, isReady, refresh } = useProductData();
-  const [date, setDate] = useState(new Date());
+  const { activities, isAuthenticated, isReady, refresh, weekStartsOn } = useProductData();
+  const [date, setDate] = useState(() => startOfDay(new Date()));
   const [view, setView] = useState<"daily" | "weekly" | "monthly">("daily");
   const [detail, setDetail] = useState<{
     title: string;
@@ -54,24 +51,34 @@ export default function TimelinePage() {
     groupByDay?: boolean;
   } | null>(null);
 
-  const weeklyActivities = useMemo(() => {
-    const start = startOfWeek(date);
-    const end = endOfWeek(date);
-    return activities.filter((activity) =>
-      isWithinInterval(new Date(activity.startTime), { start, end }),
-    );
-  }, [activities, date]);
-
-  const monthlyActivities = useMemo(() => {
-    const start = startOfMonth(date);
-    const end = endOfMonth(date);
-    return activities.filter((activity) =>
-      isWithinInterval(new Date(activity.startTime), { start, end }),
-    );
-  }, [activities, date]);
-
-  const weeklyGrouped = useMemo(() => groupActivitiesByDate(weeklyActivities), [weeklyActivities]);
-  const monthlyGrouped = useMemo(() => groupActivitiesByDate(monthlyActivities), [monthlyActivities]);
+  const weeklyStart = startOfWeek(date, { weekStartsOn });
+  const weeklyEnd = endOfWeek(date, { weekStartsOn });
+  const monthlyStart = startOfMonth(date);
+  const monthlyEnd = endOfMonth(date);
+  const weeklyGrouped = useMemo(
+    () => groupActivitiesByDate(activities, weeklyStart, weeklyEnd),
+    [activities, weeklyStart, weeklyEnd],
+  );
+  const monthlyGrouped = useMemo(
+    () => groupActivitiesByDate(activities, monthlyStart, monthlyEnd),
+    [activities, monthlyStart, monthlyEnd],
+  );
+  const weeklyDuration = useMemo(
+    () => getTotalSeconds(weeklyGrouped.flatMap((day) => day.activities)),
+    [weeklyGrouped],
+  );
+  const monthlyDuration = useMemo(
+    () => getTotalSeconds(monthlyGrouped.flatMap((day) => day.activities)),
+    [monthlyGrouped],
+  );
+  const weeklyActivityCount = useMemo(
+    () => weeklyGrouped.reduce((total, day) => total + day.count, 0),
+    [weeklyGrouped],
+  );
+  const monthlyActivityCount = useMemo(
+    () => monthlyGrouped.reduce((total, day) => total + day.count, 0),
+    [monthlyGrouped],
+  );
 
   return (
     <div className="space-y-ds-20">
@@ -117,7 +124,7 @@ export default function TimelinePage() {
             </button>
             <button
               type="button"
-              onClick={() => setDate(new Date())}
+              onClick={() => setDate(startOfDay(new Date()))}
               className="text-label font-[550] text-text-primary hover:underline"
             >
               {view === "daily" ? "Today" : view === "weekly" ? "This Week" : "This Month"}
@@ -148,11 +155,10 @@ export default function TimelinePage() {
           {view === "weekly" && (
             <div className="rounded-lg border border-border bg-surface p-ds-16">
               <h2 className="mb-ds-16 text-heading-4 font-semibold text-text-primary">
-                Week of {format(startOfWeek(date), "MMM d")}
+                Week of {format(weeklyStart, "MMM d")}
               </h2>
               <p className="mb-ds-16 text-body-sm text-text-secondary">
-                You logged {weeklyActivities.length} activities totaling{" "}
-                {formatDuration(getTotalSeconds(weeklyActivities))} this week.
+                You logged {weeklyActivityCount} activities totaling {formatDuration(weeklyDuration)} this week.
               </p>
               <div className="space-y-ds-8">
                 {weeklyGrouped.map((day) => (
@@ -184,8 +190,7 @@ export default function TimelinePage() {
                 {format(date, "MMMM yyyy")}
               </h2>
               <p className="mb-ds-16 text-body-sm text-text-secondary">
-                You logged {monthlyActivities.length} activities totaling{" "}
-                {formatDuration(getTotalSeconds(monthlyActivities))} this month.
+                You logged {monthlyActivityCount} activities totaling {formatDuration(monthlyDuration)} this month.
               </p>
               <div className="space-y-ds-8">
                 {monthlyGrouped.map((day) => (

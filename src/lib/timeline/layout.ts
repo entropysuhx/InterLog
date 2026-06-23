@@ -1,6 +1,16 @@
+import { addDays, startOfDay } from "date-fns";
+
+import { calculateDuration, toDateKey } from "@/lib/utils";
 import type { ActivityView } from "@/types";
 
-export type TimelineActivity = ActivityView & {
+export type TimelineDisplayActivity = ActivityView & {
+  sourceActivity: ActivityView;
+  isInProgress: boolean;
+  continuesFromPreviousDay: boolean;
+  continuesIntoNextDay: boolean;
+};
+
+export type TimelineActivity<T extends ActivityView = ActivityView> = T & {
   laneIndex: number;
   totalLanes: number;
 };
@@ -15,11 +25,45 @@ function effectiveEnd(activity: ActivityView): number {
   return new Date(activity.endTime ?? activity.startTime).getTime();
 }
 
-export function assignLanes(activities: ActivityView[]): TimelineActivity[] {
+/** Returns the portion of each activity that belongs to the selected local calendar day. */
+export function getTimelineActivitiesForDate(
+  activities: ActivityView[],
+  date: Date,
+  now = new Date(),
+): TimelineDisplayActivity[] {
+  const dayStart = startOfDay(date);
+  const nextDayStart = addDays(dayStart, 1);
+
+  return activities.flatMap((activity) => {
+    const originalStart = new Date(activity.startTime);
+    const originalEnd = activity.endTime ? new Date(activity.endTime) : now;
+
+    if (originalStart >= nextDayStart || originalEnd <= dayStart) return [];
+
+    const segmentStart = originalStart > dayStart ? originalStart : dayStart;
+    const segmentEnd = originalEnd < nextDayStart ? originalEnd : nextDayStart;
+
+    return [
+      {
+        ...activity,
+        id: `${activity.id}:${toDateKey(dayStart)}`,
+        startTime: segmentStart.toISOString(),
+        endTime: segmentEnd.toISOString(),
+        duration: calculateDuration(segmentStart, segmentEnd),
+        sourceActivity: activity,
+        isInProgress: activity.endTime === null,
+        continuesFromPreviousDay: originalStart < dayStart,
+        continuesIntoNextDay: originalEnd > nextDayStart,
+      },
+    ];
+  });
+}
+
+export function assignLanes<T extends ActivityView>(activities: T[]): TimelineActivity<T>[] {
   const sorted = [...activities].sort(
     (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
   );
-  const lanes: ActivityView[][] = [];
+  const lanes: T[][] = [];
 
   for (const activity of sorted) {
     const start = new Date(activity.startTime).getTime();
@@ -33,7 +77,7 @@ export function assignLanes(activities: ActivityView[]): TimelineActivity[] {
   );
 }
 
-export function getGaps(activities: ActivityView[]): TimelineGap[] {
+export function getGaps<T extends ActivityView>(activities: T[]): TimelineGap[] {
   const sorted = [...activities]
     .filter((activity) => activity.endTime)
     .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());

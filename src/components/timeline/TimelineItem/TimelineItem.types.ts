@@ -1,9 +1,8 @@
-import type { TimelineActivity } from "@/lib/timeline/layout";
+import type { TimelineActivity, TimelineDisplayActivity } from "@/lib/timeline/layout";
 
 export type TimelineItemProps = {
-  activity: TimelineActivity;
+  activity: TimelineActivity<TimelineDisplayActivity>;
   top: number;
   height: number;
-  onEdit?: (activity: TimelineActivity) => void;
+  onEdit?: (activity: TimelineActivity<TimelineDisplayActivity>) => void;
 };
-

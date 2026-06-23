@@ -17,7 +17,7 @@ export async function getProductSnapshot(): Promise<{
     await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
-        select: { name: true, email: true, image: true },
+        select: { name: true, email: true, image: true, preference: { select: { weekStartsOn: true } } },
       }),
       prisma.activity.findMany({
         where: { userId },
@@ -73,6 +73,7 @@ export async function getProductSnapshot(): Promise<{
         answer: reflection.answer,
         updatedAt: reflection.updatedAt.toISOString(),
       })),
+      weekStartsOn: user?.preference?.weekStartsOn === 0 ? 0 : 1,
     },
   };
 }

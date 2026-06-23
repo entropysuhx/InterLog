@@ -6,7 +6,12 @@ import { format, isSameDay } from "date-fns";
 
 import TimelineItem from "@/components/timeline/TimelineItem";
 import ActivityEditor from "@/components/activity/ActivityEditor";
-import { assignLanes, getBlockMetrics, getGaps } from "@/lib/timeline/layout";
+import {
+  assignLanes,
+  getBlockMetrics,
+  getGaps,
+  getTimelineActivitiesForDate,
+} from "@/lib/timeline/layout";
 import { toDateKey } from "@/lib/utils";
 import type { ActivityView } from "@/types";
 
@@ -32,11 +37,8 @@ export default function TimelineView({
   const [createRange, setCreateRange] = useState<{ start: string; end: string | null } | null>(null);
   const dateKey = toDateKey(date);
   const dayActivities = useMemo(
-    () =>
-      activities
-        .filter((activity) => toDateKey(new Date(activity.startTime)) === dateKey)
-        .map((activity) => activity),
-    [activities, dateKey],
+    () => getTimelineActivitiesForDate(activities, date),
+    [activities, date],
   );
   const laneActivities = useMemo(() => assignLanes(dayActivities), [dayActivities]);
   const gaps = useMemo(() => getGaps(dayActivities), [dayActivities]);
@@ -149,7 +151,7 @@ export default function TimelineView({
                 key={activity.id}
                 activity={activity}
                 {...metrics}
-                onEdit={(item) => setSelectedActivity(item)}
+                onEdit={(item) => setSelectedActivity(item.sourceActivity)}
               />
             );
           })}

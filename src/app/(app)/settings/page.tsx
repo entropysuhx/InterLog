@@ -1,17 +1,40 @@
 "use client";
 
-import { Database, Download, ShieldCheck, Trash2, UserRound } from "lucide-react";
+import { Database, Download, Mail, ShieldCheck, Trash2, Upload, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
-import { deleteAccount, updateProfile } from "@/actions/user";
+import {
+  deleteAccount,
+  importExportedData,
+  requestEmailChange,
+  updateProfile,
+  updateWeekStartsOn,
+} from "@/actions/user";
 import ModalShell from "@/components/layout/ModalShell";
 import { useProductData } from "@/components/providers/ProductDataProvider";
 import { migrateLocalGuestData } from "@/lib/guest/migrate";
 import { guestStore } from "@/lib/guest/store";
 
+type ImportPreview = {
+  activities: number;
+  focusSessions: number;
+  data: unknown;
+};
+
+function getImportPreview(value: unknown): ImportPreview | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (!Array.isArray(record.activities) || !Array.isArray(record.focusSessions)) return null;
+  return {
+    activities: record.activities.length,
+    focusSessions: record.focusSessions.length,
+    data: value,
+  };
+}
+
 export default function SettingsPage() {
-  const { isAuthenticated, userName, userImage } = useProductData();
+  const { isAuthenticated, userName, userImage, weekStartsOn } = useProductData();
   const router = useRouter();
   const [displayName, setDisplayName] = useState(userName ?? "");
   const [avatar, setAvatar] = useState<string | null>(userImage);
@@ -20,6 +43,15 @@ export default function SettingsPage() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importStatus, setImportStatus] = useState("");
+  const [isFileImportModalOpen, setIsFileImportModalOpen] = useState(false);
+  const [fileImportPreview, setFileImportPreview] = useState<ImportPreview | null>(null);
+  const [isImportingFile, setIsImportingFile] = useState(false);
+  const [email, setEmail] = useState("");
+  const [emailStatus, setEmailStatus] = useState("");
+  const [isRequestingEmailChange, setIsRequestingEmailChange] = useState(false);
+  const [weekStartStatus, setWeekStartStatus] = useState("");
+  const [isSavingWeekStart, setIsSavingWeekStart] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [hasGuestData, setHasGuestData] = useState(() =>
     typeof window === "undefined" ? false : guestStore.hasMigrationData(),
   );
@@ -80,6 +112,71 @@ export default function SettingsPage() {
     }
     setHasGuestData(guestStore.hasMigrationData());
     setImportStatus(`Successfully imported ${result.importedCount} records.`);
+    router.refresh();
+  }
+
+  async function handleExportFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setImportStatus("");
+    try {
+      const parsed = JSON.parse(await file.text()) as unknown;
+      const preview = getImportPreview(parsed);
+      if (!preview) {
+        setImportStatus("Choose an InterLog export file with activities and focus sessions.");
+        return;
+      }
+      setFileImportPreview(preview);
+      setIsFileImportModalOpen(true);
+    } catch {
+      setImportStatus("We couldn't read that file. Choose a valid JSON export.");
+    }
+  }
+
+  async function handleFileImport() {
+    if (!fileImportPreview) return;
+    setIsImportingFile(true);
+    setImportStatus("");
+    const result = await importExportedData(fileImportPreview.data);
+    setIsImportingFile(false);
+    if (!result.success) {
+      setImportStatus(result.error);
+      return;
+    }
+    setIsFileImportModalOpen(false);
+    setFileImportPreview(null);
+    setImportStatus(
+      `Imported ${result.data.activities} activities and ${result.data.focusSessions} focus sessions.`,
+    );
+    router.refresh();
+  }
+
+  async function handleEmailChangeSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsRequestingEmailChange(true);
+    setEmailStatus("");
+    const result = await requestEmailChange({ email });
+    setIsRequestingEmailChange(false);
+    if (!result.success) {
+      setEmailStatus(result.error);
+      return;
+    }
+    setEmailStatus(`We sent a verification link to ${result.data.email}. Your current email stays active until you confirm it.`);
+    setEmail("");
+  }
+
+  async function handleWeekStartChange(nextWeekStartsOn: 0 | 1) {
+    if (!isAuthenticated || nextWeekStartsOn === weekStartsOn) return;
+    setIsSavingWeekStart(true);
+    setWeekStartStatus("");
+    const result = await updateWeekStartsOn({ weekStartsOn: nextWeekStartsOn });
+    setIsSavingWeekStart(false);
+    if (!result.success) {
+      setWeekStartStatus(result.error);
+      return;
+    }
+    setWeekStartStatus("Week start preference saved.");
     router.refresh();
   }
 
@@ -154,6 +251,78 @@ export default function SettingsPage() {
           </form>
         </section>
       )}
+      {isAuthenticated && (
+        <section className="rounded-xl border border-border bg-surface p-ds-20">
+          <h2 className="flex items-center gap-ds-8 text-heading-4 font-semibold text-text-primary">
+            <Mail size={18} aria-hidden="true" /> Change email address
+          </h2>
+          <p className="mt-ds-8 text-body-sm text-text-secondary">
+            Your current email stays active until you verify the new address.
+          </p>
+          <form
+            onSubmit={(event) => void handleEmailChangeSubmit(event)}
+            className="mt-ds-16 flex flex-col gap-ds-12 sm:flex-row sm:items-end"
+          >
+            <label className="flex-1 text-label text-text-secondary">
+              New email address
+              <input
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className="mt-ds-8 min-h-touch-target w-full rounded-md border border-border bg-background px-ds-12 text-body-sm text-text-primary"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={isRequestingEmailChange}
+              className="min-h-touch-target rounded-md bg-interactive-primary px-ds-16 text-label font-[550] text-text-inverse disabled:bg-surface-subtle disabled:text-text-disabled"
+            >
+              {isRequestingEmailChange ? "Sending..." : "Send verification"}
+            </button>
+          </form>
+          {emailStatus && (
+            <p role="status" className="mt-ds-12 text-body-sm text-text-secondary">
+              {emailStatus}
+            </p>
+          )}
+        </section>
+      )}
+      {isAuthenticated && (
+        <section className="rounded-xl border border-border bg-surface p-ds-20">
+          <h2 className="text-heading-4 font-semibold text-text-primary">Week starts on</h2>
+          <p className="mt-ds-8 text-body-sm text-text-secondary">
+            This sets the first day for weekly timelines, calendar rows, and weekly insights.
+          </p>
+          <div className="mt-ds-16 flex rounded-md border border-border bg-surface p-ds-4">
+            {([
+              { value: 1 as const, label: "Monday" },
+              { value: 0 as const, label: "Sunday" },
+            ]).map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={weekStartsOn === option.value}
+                disabled={isSavingWeekStart}
+                onClick={() => void handleWeekStartChange(option.value)}
+                className={
+                  weekStartsOn === option.value
+                    ? "min-h-touch-target rounded-sm bg-surface-active px-ds-16 text-label font-[550] text-text-primary"
+                    : "min-h-touch-target rounded-sm px-ds-16 text-label text-text-secondary hover:bg-surface-hover"
+                }
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          {weekStartStatus && (
+            <p role="status" className="mt-ds-12 text-body-sm text-text-secondary">
+              {weekStartStatus}
+            </p>
+          )}
+        </section>
+      )}
       <section className="rounded-xl border border-border bg-surface p-ds-20">
         <h2 className="flex items-center gap-ds-8 text-heading-4 font-semibold text-text-primary">
           <ShieldCheck size={18} aria-hidden="true" /> Privacy
@@ -168,7 +337,7 @@ export default function SettingsPage() {
         <h2 className="text-heading-4 font-semibold text-text-primary">Your data</h2>
         {isAuthenticated && (
           <p className="mt-ds-8 text-body-sm text-text-secondary">
-            Import activities and reflections stored locally on this device into your account.
+            Import guest data from this device or merge an InterLog export file into your account.
           </p>
         )}
         <div className="mt-ds-16 flex flex-wrap gap-ds-8">
@@ -180,14 +349,30 @@ export default function SettingsPage() {
             <Download size={16} aria-hidden="true" /> Export data
           </button>
           {isAuthenticated && (
-            <button
-              type="button"
-              disabled={!hasGuestData || isImporting}
-              onClick={() => setIsImportModalOpen(true)}
-              className="flex min-h-touch-target items-center gap-ds-8 rounded-md border border-border px-ds-16 text-label text-text-primary disabled:text-text-disabled"
-            >
-              <Database size={16} aria-hidden="true" /> Import Guest Data
-            </button>
+            <>
+              <button
+                type="button"
+                disabled={!hasGuestData || isImporting}
+                onClick={() => setIsImportModalOpen(true)}
+                className="flex min-h-touch-target items-center gap-ds-8 rounded-md border border-border px-ds-16 text-label text-text-primary disabled:text-text-disabled"
+              >
+                <Database size={16} aria-hidden="true" /> Import Guest Data
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/json,.json"
+                className="sr-only"
+                onChange={(event) => void handleExportFileChange(event)}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex min-h-touch-target items-center gap-ds-8 rounded-md border border-border px-ds-16 text-label text-text-primary"
+              >
+                <Upload size={16} aria-hidden="true" /> Import Data File
+              </button>
+            </>
           )}
           <button
             type="button"
@@ -243,6 +428,42 @@ export default function SettingsPage() {
               className="min-h-touch-target rounded-md bg-interactive-primary px-ds-16 text-label font-[550] text-text-inverse disabled:bg-surface-subtle disabled:text-text-disabled"
             >
               {isImporting ? "Importing..." : "Import Data"}
+            </button>
+          </div>
+        </ModalShell>
+      )}
+      {isFileImportModalOpen && fileImportPreview && (
+        <ModalShell
+          titleId="import-export-data-title"
+          onClose={() => {
+            if (!isImportingFile) setIsFileImportModalOpen(false);
+          }}
+        >
+          <div>
+            <h2 id="import-export-data-title" className="text-heading-3 font-semibold text-text-primary">
+              Import InterLog data?
+            </h2>
+            <p className="mt-ds-8 text-body-sm text-text-secondary">
+              This file contains {fileImportPreview.activities} activities and {fileImportPreview.focusSessions} focus sessions.
+              Existing entries with matching IDs will be kept.
+            </p>
+          </div>
+          <div className="mt-ds-20 flex justify-end gap-ds-8">
+            <button
+              type="button"
+              disabled={isImportingFile}
+              onClick={() => setIsFileImportModalOpen(false)}
+              className="min-h-touch-target rounded-md border border-border px-ds-16 text-label text-text-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={isImportingFile}
+              onClick={() => void handleFileImport()}
+              className="min-h-touch-target rounded-md bg-interactive-primary px-ds-16 text-label font-[550] text-text-inverse disabled:bg-surface-subtle disabled:text-text-disabled"
+            >
+              {isImportingFile ? "Importing..." : "Import data"}
             </button>
           </div>
         </ModalShell>

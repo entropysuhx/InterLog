@@ -67,6 +67,7 @@ export async function saveReflection(
     });
     revalidatePath("/reflection");
     revalidatePath("/dashboard");
+    revalidatePath("/analytics");
     return { success: true, data: { savedCount: parsed.data.answers.length } };
   } catch {
     return { success: false, error: "We could not save this reflection. Your draft is still here." };
@@ -115,4 +116,3 @@ export async function saveMoodEntry(input: {
   });
   return { success: true, data: undefined };
 }
-

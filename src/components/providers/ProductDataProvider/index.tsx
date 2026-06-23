@@ -70,6 +70,7 @@ export default function ProductDataProvider({
           isReady: guest.isHydrated,
           userName: null,
           userImage: null,
+          weekStartsOn: 1,
           refresh: guest.refresh,
         };
 

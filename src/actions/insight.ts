@@ -2,7 +2,7 @@
 
 import { createHash } from "node:crypto";
 
-import { subDays } from "date-fns";
+import { format, subDays } from "date-fns";
 import { revalidatePath } from "next/cache";
 
 import { createInsightSignature, generateInsightOutput } from "@/lib/ai/insights";
@@ -31,8 +31,20 @@ export async function generateInsights(input: {
     where: { userId: session.user.id, startTime: { gte: since }, duration: { not: null } },
     include: { category: true },
   });
+  const reflectionDays = await prisma.reflectionDay.findMany({
+    where: {
+      userId: session.user.id,
+      status: "COMPLETED",
+      activityDate: { gte: format(since, "yyyy-MM-dd"), lte: format(new Date(), "yyyy-MM-dd") },
+    },
+    select: { id: true, updatedAt: true },
+  });
   const revision = createHash("sha256")
-    .update(activities.map((activity) => `${activity.id}:${activity.updatedAt.toISOString()}`).join("|"))
+    .update(
+      [...activities, ...reflectionDays]
+        .map((item) => `${item.id}:${item.updatedAt.toISOString()}`)
+        .join("|"),
+    )
     .digest("hex")
     .slice(0, 32);
   const periodKey = `${parsed.data.periodDays}d`;
@@ -63,9 +75,7 @@ export async function generateInsights(input: {
         sessions: value.sessions,
       })),
       focusSessionsByHour: [],
-      reflectionDaysCount: await prisma.reflectionDay.count({
-        where: { userId: session.user.id, status: "COMPLETED", completedAt: { gte: since } },
-      }),
+      reflectionDaysCount: reflectionDays.length,
     });
     await prisma.insight.createMany({
       data: output.insights.map((insight) => ({
@@ -129,4 +139,3 @@ export async function dismissInsight(input: {
     return { success: false, error: "Insight not found." };
   }
 }
-

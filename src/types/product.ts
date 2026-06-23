@@ -9,4 +9,5 @@ export type ProductSnapshot = {
   reflectionDays: number;
   insights: InsightView[];
   reflections: ReflectionView[];
+  weekStartsOn: 0 | 1;
 };

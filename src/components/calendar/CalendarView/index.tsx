@@ -16,18 +16,21 @@ import CategoryBadge from "@/components/activity/CategoryBadge";
 import ActivityEditor from "@/components/activity/ActivityEditor";
 import ModalShell from "@/components/layout/ModalShell";
 import { calculateAnalytics } from "@/lib/analytics/calculate";
-import { formatDuration, formatTimeRange, toDateKey } from "@/lib/utils";
+import { getTimelineActivitiesForDate } from "@/lib/timeline/layout";
+import { formatDuration, formatTimeRange } from "@/lib/utils";
 import type { ActivityView } from "@/types";
 
 type CalendarViewProps = {
   activities: ActivityView[];
   isAuthenticated?: boolean;
+  weekStartsOn?: 0 | 1;
   onChanged?: () => void;
 };
 
 export default function CalendarView({
   activities,
   isAuthenticated = false,
+  weekStartsOn = 1,
   onChanged = () => undefined,
 }: CalendarViewProps) {
   const [month, setMonth] = useState(startOfMonth(new Date()));
@@ -35,24 +38,24 @@ export default function CalendarView({
   const [createDate, setCreateDate] = useState<Date | null>(null);
   const [selectedDayDetails, setSelectedDayDetails] = useState<Date | null>(null);
   const days = eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) });
-  const leading = Array.from({ length: startOfMonth(month).getDay() });
+  const leading = Array.from({ length: (startOfMonth(month).getDay() - weekStartsOn + 7) % 7 });
+  const weekDays = weekStartsOn === 0
+    ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
   const monthAnalytics = useMemo(
     () =>
       calculateAnalytics(
-        activities.filter((a) => {
-          const d = new Date(a.startTime);
-          return d.getMonth() === month.getMonth() && d.getFullYear() === month.getFullYear();
-        }),
+        days.flatMap((day) => getTimelineActivitiesForDate(activities, day)),
         31,
       ),
-    [activities, month],
+    [activities, days],
   );
 
   const todayAnalytics = useMemo(
     () =>
       calculateAnalytics(
-        activities.filter((a) => isSameDay(new Date(a.startTime), new Date())),
+        getTimelineActivitiesForDate(activities, new Date()),
         1,
       ),
     [activities],
@@ -112,7 +115,7 @@ export default function CalendarView({
         </div>
       </div>
       <div className="mt-ds-20 grid grid-cols-7 gap-ds-4 text-center text-caption text-text-muted">
-        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+        {weekDays.map((day) => (
           <span key={day}>{day}</span>
         ))}
       </div>
@@ -121,9 +124,7 @@ export default function CalendarView({
           <div key={`leading-${index}`} />
         ))}
         {days.map((day) => {
-          const dayActivities = activities.filter(
-            (activity) => toDateKey(new Date(activity.startTime)) === toDateKey(day),
-          );
+          const dayActivities = getTimelineActivitiesForDate(activities, day);
           return (
             <div
               key={day.toISOString()}
@@ -150,7 +151,7 @@ export default function CalendarView({
                     key={activity.id}
                     type="button"
                     className="min-h-touch-target rounded-sm px-ds-4 text-left hover:bg-surface-hover"
-                    onClick={() => setSelectedActivity(activity)}
+                    onClick={() => setSelectedActivity(activity.sourceActivity)}
                   >
                     <span className="block truncate text-caption font-[550] text-text-primary">
                       {activity.title}
@@ -215,9 +216,7 @@ export default function CalendarView({
               </h2>
               <p className="mt-ds-4 text-body-sm text-text-muted">
                 {
-                  activities.filter(
-                    (a) => toDateKey(new Date(a.startTime)) === toDateKey(selectedDayDetails),
-                  ).length
+                  getTimelineActivitiesForDate(activities, selectedDayDetails).length
                 }{" "}
                 activities logged
               </p>
@@ -232,8 +231,7 @@ export default function CalendarView({
             </button>
           </div>
           <div className="mt-ds-16 flex flex-col gap-ds-12">
-            {activities
-              .filter((a) => toDateKey(new Date(a.startTime)) === toDateKey(selectedDayDetails))
+            {getTimelineActivitiesForDate(activities, selectedDayDetails)
               .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
               .map((activity) => (
                 <article key={activity.id} className="rounded-lg border border-border p-ds-12">

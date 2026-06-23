@@ -12,7 +12,8 @@ import { useProductData } from "@/components/providers/ProductDataProvider";
 export default function AnalyticsPage() {
   const {
     activities,
-    reflectionDays,
+    reflections,
+    weekStartsOn,
     insights,
     isAuthenticated,
     isReady,
@@ -65,7 +66,11 @@ export default function AnalyticsPage() {
       {isReady ? (
         <>
           <AiReflectionSection />
-          <AnalyticsDashboard activities={activities} reflectionDays={reflectionDays} />
+          <AnalyticsDashboard
+            activities={activities}
+            reflections={reflections}
+            weekStartsOn={weekStartsOn}
+          />
           <section className="space-y-ds-16" aria-label="Your insights">
             <div>
               <h2 className="text-heading-3 font-semibold text-text-primary">Your insights</h2>

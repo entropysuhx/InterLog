@@ -1,6 +1,7 @@
 import { endOfDay, startOfDay, subDays } from "date-fns";
 
-import { CATEGORY_NAMES, type ActivityView, type CategoryKey } from "@/types";
+import { CATEGORY_NAMES, type ActivityView, type CategoryKey, type ReflectionView } from "@/types";
+import { toDateKey } from "@/lib/utils";
 
 export type AnalyticsSnapshot = {
   totalTrackedSeconds: number;
@@ -9,6 +10,21 @@ export type AnalyticsSnapshot = {
   categoryBreakdown: { key: CategoryKey; name: string; seconds: number; sessions: number }[];
   dailyTrend: { date: string; seconds: number }[];
 };
+
+/** Counts unique reflection days whose local date falls within the selected period. */
+export function countReflectionDaysInRange(
+  reflections: ReflectionView[],
+  start: Date,
+  end: Date,
+): number {
+  const startKey = toDateKey(start);
+  const endKey = toDateKey(end);
+  return new Set(
+    reflections
+      .filter((reflection) => reflection.activityDate >= startKey && reflection.activityDate <= endKey)
+      .map((reflection) => reflection.activityDate),
+  ).size;
+}
 
 export function calculateAnalytics(
   activities: ActivityView[],
@@ -50,4 +66,3 @@ export function calculateAnalytics(
     dailyTrend,
   };
 }
-

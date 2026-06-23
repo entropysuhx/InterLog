@@ -13,14 +13,14 @@ async function createLearningActivity(page: Page) {
 test("guest can create, edit, and delete an activity", async ({ page }) => {
   await createLearningActivity(page);
 
-  await page.getByRole("button", { name: "Edit Study TypeScript" }).click();
+  await page.getByRole("article", { name: /Study TypeScript/ }).click();
   const editDialog = page.getByRole("dialog", { name: "Edit Activity" });
   await editDialog.getByLabel("Activity title").fill("Review TypeScript");
   await editDialog.getByRole("button", { name: "Save Activity" }).click();
   await expect(page.getByText("Review TypeScript").first()).toBeVisible();
 
   page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "Edit Review TypeScript" }).click();
+  await page.getByRole("article", { name: /Review TypeScript/ }).click();
   await page.getByRole("dialog", { name: "Edit Activity" }).getByRole("button", { name: "Delete" }).click();
   await expect(page.getByText("Review TypeScript")).toHaveCount(0);
 });
@@ -45,6 +45,47 @@ test("weekly and monthly timeline rows show logged activity details", async ({ p
   await page.getByRole("button", { name: "Monthly" }).click();
   await page.getByRole("button", { name: /1 activities/ }).click();
   await expect(page.getByRole("dialog", { name: /,/ }).getByText("Study TypeScript")).toBeVisible();
+});
+
+test("a cross-day activity starts cleanly at the midnight row", async ({ page }) => {
+  await page.addInitScript(() => {
+    const end = new Date();
+    end.setHours(2, 0, 0, 0);
+    const start = new Date(end);
+    start.setDate(start.getDate() - 1);
+    start.setHours(23, 0, 0, 0);
+    window.localStorage.setItem(
+      "interlog:activities:v1",
+      JSON.stringify([
+        {
+          id: "activity_overnight",
+          guestId: "guest_e2e",
+          title: "Overnight handoff",
+          notes: null,
+          startTime: start.toISOString(),
+          endTime: end.toISOString(),
+          duration: 3 * 60 * 60,
+          categoryKey: "deep-work",
+          categorizationSource: "USER",
+          aiConfidence: null,
+          createdAt: start.toISOString(),
+          updatedAt: end.toISOString(),
+        },
+      ]),
+    );
+  });
+
+  await page.goto("/dashboard");
+  const timeline = page.locator("#timeline-view");
+  const activity = page.getByRole("article", { name: /Overnight handoff/ });
+  await expect(activity).toBeVisible();
+  await expect(activity).toContainText("Overnight handoff");
+  await expect(activity).toContainText("Continues from previous day");
+
+  const [timelineBox, activityBox] = await Promise.all([timeline.boundingBox(), activity.boundingBox()]);
+  expect(timelineBox).not.toBeNull();
+  expect(activityBox).not.toBeNull();
+  expect(activityBox!.y).toBeGreaterThanOrEqual(timelineBox!.y);
 });
 
 test("reflection switches to saved journal mode", async ({ page }) => {

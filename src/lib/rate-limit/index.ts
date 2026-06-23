@@ -13,21 +13,29 @@ export async function consumeRateLimit(
   windowSeconds: number,
 ): Promise<RateLimitResult> {
   const now = new Date();
-  const windowStart = new Date(
-    Math.floor(now.getTime() / (windowSeconds * 1000)) * windowSeconds * 1000,
-  );
-  const expiresAt = new Date(windowStart.getTime() + windowSeconds * 1000);
-
-  const event = await prisma.rateLimitEvent.upsert({
-    where: { key_action_windowStart: { key, action, windowStart } },
-    create: { key, action, windowStart, expiresAt, count: 1 },
-    update: { count: { increment: 1 } },
+  const activeEvent = await prisma.rateLimitEvent.findFirst({
+    where: { key, action, expiresAt: { gt: now } },
+    orderBy: { windowStart: "desc" },
   });
+  const event = activeEvent
+    ? await prisma.rateLimitEvent.update({
+        where: { id: activeEvent.id },
+        data: { count: { increment: 1 } },
+      })
+    : await prisma.rateLimitEvent.create({
+        data: {
+          key,
+          action,
+          windowStart: now,
+          expiresAt: new Date(now.getTime() + windowSeconds * 1000),
+          count: 1,
+        },
+      });
 
   return {
     allowed: event.count <= limit,
     remaining: Math.max(0, limit - event.count),
-    retryAfterSeconds: Math.max(1, Math.ceil((expiresAt.getTime() - now.getTime()) / 1000)),
+    retryAfterSeconds: Math.max(1, Math.ceil((event.expiresAt.getTime() - now.getTime()) / 1000)),
   };
 }
 
@@ -38,17 +46,15 @@ export async function getRateLimitStatus(
   windowSeconds: number,
 ): Promise<RateLimitResult> {
   const now = new Date();
-  const windowStart = new Date(
-    Math.floor(now.getTime() / (windowSeconds * 1000)) * windowSeconds * 1000,
-  );
-  const expiresAt = new Date(windowStart.getTime() + windowSeconds * 1000);
-  const event = await prisma.rateLimitEvent.findUnique({
-    where: { key_action_windowStart: { key, action, windowStart } },
+  const event = await prisma.rateLimitEvent.findFirst({
+    where: { key, action, expiresAt: { gt: now } },
+    orderBy: { windowStart: "desc" },
   });
   const count = event?.count ?? 0;
+  const expiresAt = event?.expiresAt ?? new Date(now.getTime() + windowSeconds * 1000);
 
   return {
-    allowed: count <= limit,
+    allowed: count < limit,
     remaining: Math.max(0, limit - count),
     retryAfterSeconds: Math.max(1, Math.ceil((expiresAt.getTime() - now.getTime()) / 1000)),
   };
