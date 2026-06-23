@@ -138,18 +138,25 @@ export default function SettingsPage() {
     if (!fileImportPreview) return;
     setIsImportingFile(true);
     setImportStatus("");
-    const result = await importExportedData(fileImportPreview.data);
-    setIsImportingFile(false);
-    if (!result.success) {
-      setImportStatus(result.error);
-      return;
+    try {
+      const result = await importExportedData(fileImportPreview.data);
+      if (!result.success) {
+        console.error("Export file import failed", result.error);
+        setImportStatus(result.error);
+        return;
+      }
+      setIsFileImportModalOpen(false);
+      setFileImportPreview(null);
+      setImportStatus(
+        `Imported ${result.data.activities} activities and ${result.data.focusSessions} focus sessions.`,
+      );
+      router.refresh();
+    } catch (error) {
+      console.error("Export file import request failed", error);
+      setImportStatus("We couldn't import that file right now. Please try again.");
+    } finally {
+      setIsImportingFile(false);
     }
-    setIsFileImportModalOpen(false);
-    setFileImportPreview(null);
-    setImportStatus(
-      `Imported ${result.data.activities} activities and ${result.data.focusSessions} focus sessions.`,
-    );
-    router.refresh();
   }
 
   async function handleEmailChangeSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -445,8 +452,13 @@ export default function SettingsPage() {
             </h2>
             <p className="mt-ds-8 text-body-sm text-text-secondary">
               This file contains {fileImportPreview.activities} activities and {fileImportPreview.focusSessions} focus sessions.
-              Existing entries with matching IDs will be kept.
+              Existing matching entries will be kept.
             </p>
+            {importStatus && (
+              <p role="status" className="mt-ds-12 text-body-sm text-status-error">
+                {importStatus}
+              </p>
+            )}
           </div>
           <div className="mt-ds-20 flex justify-end gap-ds-8">
             <button

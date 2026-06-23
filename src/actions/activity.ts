@@ -34,7 +34,14 @@ export async function createActivity(
     revalidatePath("/calendar");
     revalidatePath("/analytics");
     return { success: true, data: result };
-  } catch {
+  } catch (error) {
+    console.error("Failed to create activity", { userId: session.user.id, error });
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+      return {
+        success: false,
+        error: "We couldn't save this activity because its category is unavailable. Please refresh and try again.",
+      };
+    }
     return { success: false, error: "We could not save this entry. Your draft is still here." };
   }
 }

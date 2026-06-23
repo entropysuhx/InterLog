@@ -2,6 +2,7 @@
 
 import { createHash, randomBytes } from "node:crypto";
 
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -77,6 +78,38 @@ const ImportExportDataSchema = z
 
 function tokenHash(token: string): string {
   return createHash("sha256").update(token).digest("hex");
+}
+
+function importedActivityKey(activity: {
+  title: string;
+  startTime: Date;
+  endTime: Date | null;
+  duration: number | null;
+  categoryId: string;
+}): string {
+  return [
+    activity.title,
+    activity.startTime.toISOString(),
+    activity.endTime?.toISOString() ?? "",
+    activity.duration ?? "",
+    activity.categoryId,
+  ].join("|");
+}
+
+function importedFocusSessionKey(session: {
+  title: string;
+  status: "ACTIVE" | "COMPLETED" | "CANCELLED";
+  startTime: Date;
+  endTime: Date | null;
+  duration: number | null;
+}): string {
+  return [
+    session.title,
+    session.status,
+    session.startTime.toISOString(),
+    session.endTime?.toISOString() ?? "",
+    session.duration ?? "",
+  ].join("|");
 }
 
 export async function updateProfile(
@@ -227,57 +260,80 @@ export async function importExportedData(
   try {
     const imported = await prisma.$transaction(async (transaction) => {
       const existingActivities = await transaction.activity.findMany({
-        where: { userId: session.user.id, id: { in: parsed.data.activities.map((activity) => activity.id) } },
-        select: { id: true },
+        where: { userId: session.user.id },
+        select: { id: true, title: true, startTime: true, endTime: true, duration: true, categoryId: true },
       });
-      const existingActivityIds = new Set(existingActivities.map((activity) => activity.id));
-      const activityResult = await transaction.activity.createMany({
-        data: parsed.data.activities
-          .filter((activity) => !existingActivityIds.has(activity.id))
-          .map((activity) => ({
-            id: activity.id,
+      const activityIdsByKey = new Map(
+        existingActivities.map((activity) => [importedActivityKey(activity), activity.id]),
+      );
+      const importedActivityIds = new Map<string, string>();
+      let activityCount = 0;
+
+      for (const activity of parsed.data.activities) {
+        const activityData = {
+          title: activity.title,
+          startTime: new Date(activity.startTime),
+          endTime: activity.endTime ? new Date(activity.endTime) : null,
+          duration: activity.duration,
+          categoryId: activity.categoryId,
+        };
+        const key = importedActivityKey(activityData);
+        const existingId = activityIdsByKey.get(key);
+        if (existingId) {
+          importedActivityIds.set(activity.id, existingId);
+          continue;
+        }
+        const created = await transaction.activity.create({
+          data: {
             userId: session.user.id,
-            title: activity.title,
+            ...activityData,
             notes: activity.notes ?? null,
-            startTime: new Date(activity.startTime),
-            endTime: activity.endTime ? new Date(activity.endTime) : null,
-            duration: activity.duration,
-            categoryId: activity.categoryId,
             categorizationSource: activity.categorizationSource,
             aiConfidence: activity.aiConfidence,
             createdAt: new Date(activity.createdAt),
             updatedAt: new Date(activity.updatedAt),
-          })),
-        skipDuplicates: true,
-      });
-      const availableActivities = await transaction.activity.findMany({
-        where: { userId: session.user.id, id: { in: parsed.data.activities.map((activity) => activity.id) } },
-        select: { id: true },
-      });
-      const availableActivityIds = new Set(availableActivities.map((activity) => activity.id));
+          },
+          select: { id: true },
+        });
+        activityIdsByKey.set(key, created.id);
+        importedActivityIds.set(activity.id, created.id);
+        activityCount += 1;
+      }
+
       const existingFocusSessions = await transaction.focusSession.findMany({
-        where: { userId: session.user.id, id: { in: parsed.data.focusSessions.map((focus) => focus.id) } },
-        select: { id: true },
+        where: { userId: session.user.id },
+        select: { id: true, title: true, status: true, startTime: true, endTime: true, duration: true },
       });
-      const existingFocusSessionIds = new Set(existingFocusSessions.map((focus) => focus.id));
-      const focusResult = await transaction.focusSession.createMany({
-        data: parsed.data.focusSessions
-          .filter((focus) => !existingFocusSessionIds.has(focus.id))
-          .map((focus) => ({
-            id: focus.id,
+      const focusIdsByKey = new Map(
+        existingFocusSessions.map((focus) => [importedFocusSessionKey(focus), focus.id]),
+      );
+      let focusSessionCount = 0;
+
+      for (const focus of parsed.data.focusSessions) {
+        const focusData = {
+          title: focus.title,
+          status: focus.status,
+          startTime: new Date(focus.startTime),
+          endTime: focus.endTime ? new Date(focus.endTime) : null,
+          duration: focus.duration,
+        };
+        const key = importedFocusSessionKey(focusData);
+        if (focusIdsByKey.has(key)) continue;
+        const created = await transaction.focusSession.create({
+          data: {
             userId: session.user.id,
-            activityId: focus.activityId && availableActivityIds.has(focus.activityId) ? focus.activityId : null,
-            title: focus.title,
-            status: focus.status,
-            startTime: new Date(focus.startTime),
-            endTime: focus.endTime ? new Date(focus.endTime) : null,
-            duration: focus.duration,
+            ...focusData,
+            activityId: focus.activityId ? importedActivityIds.get(focus.activityId) ?? null : null,
             createdAt: new Date(focus.createdAt),
             updatedAt: new Date(focus.updatedAt),
-          })),
-        skipDuplicates: true,
-      });
-      return { activities: activityResult.count, focusSessions: focusResult.count };
+          },
+          select: { id: true },
+        });
+        focusIdsByKey.set(key, created.id);
+        focusSessionCount += 1;
+      }
+
+      return { activities: activityCount, focusSessions: focusSessionCount };
     });
     revalidatePath("/dashboard");
     revalidatePath("/timeline");
@@ -286,7 +342,16 @@ export async function importExportedData(
     revalidatePath("/wrapped");
     return { success: true, data: imported };
   } catch (error) {
-    console.error("Failed to import exported data", error);
+    console.error("Failed to import exported data", {
+      userId: session.user.id,
+      error,
+    });
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+      return {
+        success: false,
+        error: "This account is missing InterLog activity categories. Please contact support before importing.",
+      };
+    }
     return { success: false, error: "We couldn't import that file. Your existing data is unchanged." };
   }
 }
