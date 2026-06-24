@@ -4,6 +4,7 @@ import { BookOpen, Check, ChevronDown, Loader2, Pencil } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { saveReflection } from "@/actions/reflection";
+import ActionLoadingOverlay from "@/components/layout/ActionLoadingOverlay";
 import { guestStore } from "@/lib/guest/store";
 import { selectReflectionPrompts } from "@/lib/reflection/prompts";
 import type { ActivityView, ReflectionView } from "@/types";
@@ -40,19 +41,22 @@ export default function ReflectionCard({
   const [status, setStatus] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(savedReflections.length === 0);
-  const [savedAt, setSavedAt] = useState<string | null>(
-    savedReflections[0]?.updatedAt ?? null,
-  );
+  const [savedAt, setSavedAt] = useState<string | null>(savedReflections[0]?.updatedAt ?? null);
 
   useEffect(() => {
     const persisted = savedReflections.filter((reflection) => reflection.activityDate === date);
     if (persisted.length > 0) {
-      setAnswers(Object.fromEntries(persisted.map((reflection) => [reflection.prompt, reflection.answer])));
+      setAnswers(
+        Object.fromEntries(persisted.map((reflection) => [reflection.prompt, reflection.answer])),
+      );
       setSavedAt(persisted[0].updatedAt);
       setIsEditing(false);
       return;
     }
-    const draft = guestStore.getReflectionDraft<{ answers: Record<string, string>; mood: number | null }>(date);
+    const draft = guestStore.getReflectionDraft<{
+      answers: Record<string, string>;
+      mood: number | null;
+    }>(date);
     if (draft) {
       setAnswers(draft.answers);
       setMood(draft.mood);
@@ -83,26 +87,31 @@ export default function ReflectionCard({
       .filter((answer) => answer.answer);
     if (!completed[0]?.answer) return;
     setIsSaving(true);
-    if (isAuthenticated) {
-      const result = await saveReflection({
-        activityDate: date,
-        answers: completed,
-        mood: mood ?? undefined,
-      });
-      if (!result.success) {
-        setStatus(result.error);
-        setIsSaving(false);
-        return;
+    try {
+      if (isAuthenticated) {
+        const result = await saveReflection({
+          activityDate: date,
+          answers: completed,
+          mood: mood ?? undefined,
+        });
+        if (!result.success) {
+          setStatus(result.error);
+          return;
+        }
+      } else {
+        guestStore.saveReflections(date, completed);
       }
-    } else {
-      guestStore.saveReflections(date, completed);
+      guestStore.clearReflectionDraft(date);
+      setStatus("Reflection saved.");
+      setSavedAt(new Date().toISOString());
+      setIsEditing(false);
+      onSaved?.();
+    } catch (error) {
+      console.error("Reflection save failed", error);
+      setStatus("We couldn't save this reflection right now. Your draft is still here.");
+    } finally {
+      setIsSaving(false);
     }
-    guestStore.clearReflectionDraft(date);
-    setStatus("Reflection saved.");
-    setSavedAt(new Date().toISOString());
-    setIsEditing(false);
-    setIsSaving(false);
-    onSaved?.();
   }
 
   return (
@@ -112,6 +121,7 @@ export default function ReflectionCard({
         className="flex w-full items-center justify-between text-left"
         onClick={() => setIsExpanded((value) => !value)}
         aria-expanded={isExpanded}
+        disabled={isSaving}
       >
         <span className="flex items-center gap-ds-8 text-label font-[550] text-text-primary">
           <BookOpen size={18} className="text-interactive-primary" aria-hidden="true" />
@@ -133,7 +143,9 @@ export default function ReflectionCard({
                   .map(([prompt, answer]) => (
                     <div key={prompt}>
                       <h3 className="text-label font-[550] text-text-secondary">{prompt}</h3>
-                      <p className="mt-ds-4 whitespace-pre-wrap text-body-sm text-text-primary">{answer}</p>
+                      <p className="mt-ds-4 whitespace-pre-wrap text-body-sm text-text-primary">
+                        {answer}
+                      </p>
                     </div>
                   ))}
               </div>
@@ -146,6 +158,7 @@ export default function ReflectionCard({
                 <button
                   type="button"
                   onClick={() => setIsEditing(true)}
+                  disabled={isSaving}
                   className="flex min-h-touch-target items-center gap-ds-8 rounded-md border border-border bg-surface px-ds-12 text-label text-text-secondary hover:bg-surface-hover"
                 >
                   <Pencil size={16} aria-hidden="true" />
@@ -155,63 +168,76 @@ export default function ReflectionCard({
             </article>
           ) : (
             <>
-          {allPrompts.map((prompt, index) => (
-            <label key={prompt} className="mb-ds-16 block">
-              <span className="mb-ds-8 block text-body-sm font-[550] text-text-secondary">
-                {prompt} {index > 0 && <span className="text-caption text-text-muted">(optional)</span>}
-              </span>
-              <textarea
-                value={answers[prompt] ?? ""}
-                onChange={(event) =>
-                  setAnswers((current) => ({ ...current, [prompt]: event.target.value }))
-                }
-                rows={index === 0 ? 4 : 2}
-                className="w-full resize-y rounded-md border border-border bg-background p-ds-12 text-body-sm text-text-primary placeholder:text-text-muted focus:border-border-active"
-                placeholder="Write what comes to mind..."
-              />
-            </label>
-          ))}
-          <fieldset>
-            <legend className="text-label font-[550] text-text-secondary">
-              How did today feel? <span className="text-caption text-text-muted">(private)</span>
-            </legend>
-            <div className="mt-ds-8 grid grid-cols-2 gap-ds-8 sm:grid-cols-5">
-              {moods.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={mood === option.value}
-                  onClick={() => setMood(option.value)}
-                  className={
-                    mood === option.value
-                      ? "min-h-touch-target rounded-md border border-border-active bg-surface-active text-caption text-text-primary"
-                      : "min-h-touch-target rounded-md border border-border bg-surface text-caption text-text-secondary hover:bg-surface-hover"
-                  }
-                >
-                  {option.label}
-                </button>
+              {allPrompts.map((prompt, index) => (
+                <label key={prompt} className="mb-ds-16 block">
+                  <span className="mb-ds-8 block text-body-sm font-[550] text-text-secondary">
+                    {prompt}{" "}
+                    {index > 0 && <span className="text-caption text-text-muted">(optional)</span>}
+                  </span>
+                  <textarea
+                    value={answers[prompt] ?? ""}
+                    onChange={(event) =>
+                      setAnswers((current) => ({ ...current, [prompt]: event.target.value }))
+                    }
+                    rows={index === 0 ? 4 : 2}
+                    disabled={isSaving}
+                    className="w-full resize-y rounded-md border border-border bg-background p-ds-12 text-body-sm text-text-primary placeholder:text-text-muted focus:border-border-active"
+                    placeholder="Write what comes to mind..."
+                  />
+                </label>
               ))}
-            </div>
-          </fieldset>
-          <div className="mt-ds-16 flex flex-wrap items-center justify-between gap-ds-12">
-            <span className="flex items-center gap-ds-4 text-caption text-text-muted" role="status">
-              {status && <Check size={14} aria-hidden="true" />}
-              {status}
-            </span>
-            <button
-              type="button"
-              onClick={() => void handleSave()}
-              disabled={!answers[prompts.primaryPrompt]?.trim() || isSaving}
-              className="flex min-h-touch-target items-center gap-ds-8 rounded-md bg-interactive-primary px-ds-16 text-label font-[550] text-text-inverse hover:bg-interactive-primary-hover disabled:bg-surface-subtle disabled:text-text-disabled"
-            >
-              {isSaving && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
-              {isSaving ? "Saving..." : "Save reflection"}
-            </button>
-          </div>
+              <fieldset>
+                <legend className="text-label font-[550] text-text-secondary">
+                  How did today feel?{" "}
+                  <span className="text-caption text-text-muted">(private)</span>
+                </legend>
+                <div className="mt-ds-8 grid grid-cols-2 gap-ds-8 sm:grid-cols-5">
+                  {moods.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={mood === option.value}
+                      onClick={() => setMood(option.value)}
+                      disabled={isSaving}
+                      className={
+                        mood === option.value
+                          ? "min-h-touch-target rounded-md border border-border-active bg-surface-active text-caption text-text-primary"
+                          : "min-h-touch-target rounded-md border border-border bg-surface text-caption text-text-secondary hover:bg-surface-hover"
+                      }
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+              <div className="mt-ds-16 flex flex-wrap items-center justify-between gap-ds-12">
+                <span
+                  className="flex items-center gap-ds-4 text-caption text-text-muted"
+                  role="status"
+                >
+                  {status && <Check size={14} aria-hidden="true" />}
+                  {status}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void handleSave()}
+                  disabled={!answers[prompts.primaryPrompt]?.trim() || isSaving}
+                  className="flex min-h-touch-target items-center gap-ds-8 rounded-md bg-interactive-primary px-ds-16 text-label font-[550] text-text-inverse hover:bg-interactive-primary-hover disabled:bg-surface-subtle disabled:text-text-disabled"
+                >
+                  {isSaving && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
+                  {isSaving ? "Saving..." : "Save reflection"}
+                </button>
+              </div>
             </>
           )}
         </div>
+      )}
+      {isSaving && (
+        <ActionLoadingOverlay
+          title="Saving your reflection..."
+          subtitle="Your thoughts are being saved securely."
+        />
       )}
     </section>
   );

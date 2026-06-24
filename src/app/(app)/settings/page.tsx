@@ -11,6 +11,8 @@ import {
   updateProfile,
   updateWeekStartsOn,
 } from "@/actions/user";
+import ActionLoadingOverlay from "@/components/layout/ActionLoadingOverlay";
+import ActionToast from "@/components/layout/ActionToast";
 import ModalShell from "@/components/layout/ModalShell";
 import { useProductData } from "@/components/providers/ProductDataProvider";
 import { migrateLocalGuestData } from "@/lib/guest/migrate";
@@ -46,6 +48,7 @@ export default function SettingsPage() {
   const [isFileImportModalOpen, setIsFileImportModalOpen] = useState(false);
   const [fileImportPreview, setFileImportPreview] = useState<ImportPreview | null>(null);
   const [isImportingFile, setIsImportingFile] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [email, setEmail] = useState("");
   const [emailStatus, setEmailStatus] = useState("");
   const [isRequestingEmailChange, setIsRequestingEmailChange] = useState(false);
@@ -83,36 +86,51 @@ export default function SettingsPage() {
     router.refresh();
   }
 
-  function handleExport() {
-    if (isAuthenticated) {
-      window.location.assign("/api/export");
-      return;
+  async function handleExport() {
+    setIsExporting(true);
+    setImportStatus("");
+    try {
+      const blob = isAuthenticated
+        ? await fetch("/api/export", { cache: "no-store" }).then(async (response) => {
+            if (!response.ok) throw new Error(`Export request failed with ${response.status}.`);
+            return response.blob();
+          })
+        : new Blob([JSON.stringify(guestStore.export(), null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = isAuthenticated ? "interlog-export.json" : "interlog-guest-export.json";
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setImportStatus("Your data export is ready.");
+    } catch (error) {
+      console.error("Data export failed", error);
+      setImportStatus("We couldn't prepare your export right now. Please try again.");
+    } finally {
+      setIsExporting(false);
     }
-    const blob = new Blob([JSON.stringify(guestStore.export(), null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "interlog-guest-export.json";
-    anchor.click();
-    URL.revokeObjectURL(url);
   }
 
   async function handleImport() {
     setIsImporting(true);
     setImportStatus("");
-    const result = await migrateLocalGuestData();
-    setIsImporting(false);
-    setIsImportModalOpen(false);
-    if (!result.success) {
-      console.error("Manual guest data import failed", result.error);
-      setImportStatus(result.error);
-      return;
+    try {
+      const result = await migrateLocalGuestData();
+      setIsImportModalOpen(false);
+      if (!result.success) {
+        console.error("Manual guest data import failed", result.error);
+        setImportStatus(result.error);
+        return;
+      }
+      setHasGuestData(guestStore.hasMigrationData());
+      setImportStatus(`Successfully imported ${result.importedCount} records.`);
+      router.refresh();
+    } catch (error) {
+      console.error("Manual guest data import request failed", error);
+      setImportStatus("We couldn't import your local data right now. Please try again.");
+    } finally {
+      setIsImporting(false);
     }
-    setHasGuestData(guestStore.hasMigrationData());
-    setImportStatus(`Successfully imported ${result.importedCount} records.`);
-    router.refresh();
   }
 
   async function handleExportFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -166,14 +184,22 @@ export default function SettingsPage() {
     event.preventDefault();
     setIsRequestingEmailChange(true);
     setEmailStatus("");
-    const result = await requestEmailChange({ email });
-    setIsRequestingEmailChange(false);
-    if (!result.success) {
-      setEmailStatus(result.error);
-      return;
+    try {
+      const result = await requestEmailChange({ email });
+      if (!result.success) {
+        setEmailStatus(result.error);
+        return;
+      }
+      setEmailStatus(
+        `We sent a verification link to ${result.data.email}. Your current email stays active until you confirm it.`,
+      );
+      setEmail("");
+    } catch (error) {
+      console.error("Email-change verification request failed", error);
+      setEmailStatus("We couldn't send the verification email right now. Please try again.");
+    } finally {
+      setIsRequestingEmailChange(false);
     }
-    setEmailStatus(`We sent a verification link to ${result.data.email}. Your current email stays active until you confirm it.`);
-    setEmail("");
   }
 
   async function handleWeekStartChange(nextWeekStartsOn: 0 | 1) {
@@ -189,6 +215,8 @@ export default function SettingsPage() {
     setWeekStartStatus("Week start preference saved.");
     router.refresh();
   }
+
+  const isDataActionRunning = isImporting || isImportingFile || isExporting;
 
   return (
     <div className="mx-auto max-w-reading space-y-ds-20">
@@ -280,6 +308,7 @@ export default function SettingsPage() {
                 autoComplete="email"
                 required
                 value={email}
+                disabled={isRequestingEmailChange}
                 onChange={(event) => setEmail(event.target.value)}
                 className="mt-ds-8 min-h-touch-target w-full rounded-md border border-border bg-background px-ds-12 text-body-sm text-text-primary"
               />
@@ -306,10 +335,10 @@ export default function SettingsPage() {
             This sets the first day for weekly timelines, calendar rows, and weekly insights.
           </p>
           <div className="mt-ds-16 flex rounded-md border border-border bg-surface p-ds-4">
-            {([
+            {[
               { value: 1 as const, label: "Monday" },
               { value: 0 as const, label: "Sunday" },
-            ]).map((option) => (
+            ].map((option) => (
               <button
                 key={option.value}
                 type="button"
@@ -353,7 +382,8 @@ export default function SettingsPage() {
         <div className="mt-ds-16 flex flex-wrap gap-ds-8">
           <button
             type="button"
-            onClick={handleExport}
+            disabled={isDataActionRunning}
+            onClick={() => void handleExport()}
             className="flex min-h-touch-target items-center gap-ds-8 rounded-md border border-border px-ds-16 text-label text-text-primary"
           >
             <Download size={16} aria-hidden="true" /> Export data
@@ -362,7 +392,7 @@ export default function SettingsPage() {
             <>
               <button
                 type="button"
-                disabled={!hasGuestData || isImporting}
+                disabled={!hasGuestData || isDataActionRunning}
                 onClick={() => setIsImportModalOpen(true)}
                 className="flex min-h-touch-target items-center gap-ds-8 rounded-md border border-border px-ds-16 text-label text-text-primary disabled:text-text-disabled"
               >
@@ -373,10 +403,12 @@ export default function SettingsPage() {
                 type="file"
                 accept="application/json,.json"
                 className="sr-only"
+                disabled={isDataActionRunning}
                 onChange={(event) => void handleExportFileChange(event)}
               />
               <button
                 type="button"
+                disabled={isDataActionRunning}
                 onClick={() => fileInputRef.current?.click()}
                 className="flex min-h-touch-target items-center gap-ds-8 rounded-md border border-border px-ds-16 text-label text-text-primary"
               >
@@ -450,12 +482,16 @@ export default function SettingsPage() {
           }}
         >
           <div>
-            <h2 id="import-export-data-title" className="text-heading-3 font-semibold text-text-primary">
+            <h2
+              id="import-export-data-title"
+              className="text-heading-3 font-semibold text-text-primary"
+            >
               Import InterLog data?
             </h2>
             <p className="mt-ds-8 text-body-sm text-text-secondary">
-              This file contains {fileImportPreview.activities} activities and {fileImportPreview.focusSessions} focus sessions.
-              Existing matching entries will be kept.
+              This file contains {fileImportPreview.activities} activities and{" "}
+              {fileImportPreview.focusSessions} focus sessions. Existing matching entries will be
+              kept.
             </p>
             {importStatus && (
               <p role="status" className="mt-ds-12 text-body-sm text-status-error">
@@ -482,6 +518,38 @@ export default function SettingsPage() {
             </button>
           </div>
         </ModalShell>
+      )}
+      {(isDataActionRunning || isRequestingEmailChange) && (
+        <ActionLoadingOverlay
+          title={
+            isRequestingEmailChange
+              ? "Sending verification email..."
+              : isExporting
+                ? "Preparing your export..."
+                : "Importing your data..."
+          }
+          subtitle="This may take a few seconds."
+        />
+      )}
+      {importStatus && (
+        <ActionToast
+          message={importStatus}
+          tone={
+            importStatus.startsWith("Imported") ||
+            importStatus.startsWith("Successfully") ||
+            importStatus.startsWith("Your data")
+              ? "success"
+              : "error"
+          }
+          onDismiss={() => setImportStatus("")}
+        />
+      )}
+      {emailStatus && (
+        <ActionToast
+          message={emailStatus}
+          tone={emailStatus.startsWith("We sent") ? "success" : "error"}
+          onDismiss={() => setEmailStatus("")}
+        />
       )}
     </div>
   );

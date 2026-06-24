@@ -3,20 +3,31 @@
 import { useState } from "react";
 
 import { resendVerificationEmail } from "@/actions/auth";
+import ActionLoadingOverlay from "@/components/layout/ActionLoadingOverlay";
+import ActionToast from "@/components/layout/ActionToast";
 
 export default function ResendVerificationForm({ email }: { email: string }) {
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"success" | "error">("success");
   const [isLoading, setIsLoading] = useState(false);
 
   async function handleClick() {
     setIsLoading(true);
-    const result = await resendVerificationEmail({ email });
-    setMessage(
-      result.success
-        ? "If this account still needs verification, we sent a new link."
-        : result.error,
-    );
-    setIsLoading(false);
+    try {
+      const result = await resendVerificationEmail({ email });
+      setMessage(
+        result.success
+          ? "If this account still needs verification, we sent a new link."
+          : result.error,
+      );
+      setMessageTone(result.success ? "success" : "error");
+    } catch (error) {
+      console.error("Verification email request failed", error);
+      setMessage("We couldn't send the email right now. Please try again.");
+      setMessageTone("error");
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -33,6 +44,15 @@ export default function ResendVerificationForm({ email }: { email: string }) {
         <p role="status" className="text-body-sm text-text-secondary">
           {message}
         </p>
+      )}
+      {isLoading && (
+        <ActionLoadingOverlay
+          title="Sending verification email..."
+          subtitle="Check your inbox in a moment."
+        />
+      )}
+      {message && (
+        <ActionToast message={message} tone={messageTone} onDismiss={() => setMessage("")} />
       )}
     </div>
   );
