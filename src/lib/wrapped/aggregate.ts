@@ -8,7 +8,9 @@ export async function aggregateWrapped(
   period: "monthly" | "yearly",
   periodKey: string,
 ): Promise<{ input: WrappedInput; sourceRevision: string; activityCount: number }> {
-  const anchor = new Date(period === "monthly" ? `${periodKey}-01T00:00:00` : `${periodKey}-01-01T00:00:00`);
+  const anchor = new Date(
+    period === "monthly" ? `${periodKey}-01T00:00:00` : `${periodKey}-01-01T00:00:00`,
+  );
   const start = period === "monthly" ? startOfMonth(anchor) : startOfYear(anchor);
   const end = period === "monthly" ? endOfMonth(anchor) : endOfYear(anchor);
   const activities = await prisma.activity.findMany({
@@ -20,12 +22,21 @@ export async function aggregateWrapped(
     where: { userId, startTime: { gte: start, lte: end }, status: "COMPLETED" },
     orderBy: { duration: "desc" },
   });
-  const reflectionDaysCount = await prisma.reflectionDay.count({
-    where: { userId, activityDate: { gte: format(start, "yyyy-MM-dd"), lte: format(end, "yyyy-MM-dd") }, status: "COMPLETED" },
+  const reflections = await prisma.reflection.findMany({
+    where: {
+      userId,
+      activityDate: { gte: format(start, "yyyy-MM-dd"), lte: format(end, "yyyy-MM-dd") },
+    },
+    select: { activityDate: true, id: true, updatedAt: true },
   });
+  const reflectionDaysCount = new Set(reflections.map((reflection) => reflection.activityDate))
+    .size;
   const byCategory = new Map<string, number>();
   const totalSeconds = activities.reduce((sum, activity) => {
-    byCategory.set(activity.category.key, (byCategory.get(activity.category.key) ?? 0) + (activity.duration ?? 0));
+    byCategory.set(
+      activity.category.key,
+      (byCategory.get(activity.category.key) ?? 0) + (activity.duration ?? 0),
+    );
     return sum + (activity.duration ?? 0);
   }, 0);
   const topCategories = [...byCategory]
@@ -38,7 +49,7 @@ export async function aggregateWrapped(
   const longest = focusSessions[0];
   const sourceRevision = activities
     .map((activity) => `${activity.id}:${activity.updatedAt.getTime()}`)
-    .concat(`reflections:${reflectionDaysCount}`)
+    .concat(reflections.map((reflection) => `${reflection.id}:${reflection.updatedAt.getTime()}`))
     .join("|");
   return {
     sourceRevision: Buffer.from(sourceRevision).toString("base64url").slice(0, 64),
@@ -64,4 +75,3 @@ export async function aggregateWrapped(
     },
   };
 }
-

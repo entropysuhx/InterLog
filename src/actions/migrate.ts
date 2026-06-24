@@ -75,6 +75,26 @@ export async function migrateGuestData(
         })),
         skipDuplicates: true,
       });
+      const reflectionPromptsByDate = new Map<string, string[]>();
+      for (const reflection of parsed.data.reflections) {
+        const prompts = reflectionPromptsByDate.get(reflection.activityDate) ?? [];
+        prompts.push(reflection.prompt);
+        reflectionPromptsByDate.set(reflection.activityDate, prompts);
+      }
+      for (const [activityDate, prompts] of reflectionPromptsByDate) {
+        await transaction.reflectionDay.upsert({
+          where: { userId_activityDate: { userId: session.user.id, activityDate } },
+          update: { status: "COMPLETED", completedAt: new Date() },
+          create: {
+            userId: session.user.id,
+            activityDate,
+            primaryPrompt: prompts[0],
+            optionalPrompts: prompts.slice(1),
+            status: "COMPLETED",
+            completedAt: new Date(),
+          },
+        });
+      }
       const focuses = await transaction.focusSession.createMany({
         data: parsed.data.focusSessions.map((focus) => ({
           id: focus.id,

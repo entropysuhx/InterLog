@@ -34,6 +34,7 @@ const UpdateWeekStartsOnSchema = z
   .strict();
 
 const ChangeEmailSchema = z.object({ email: z.string().trim().email().max(254) }).strict();
+const ResetUserDataSchema = z.object({ confirmation: z.literal("DELETE") }).strict();
 
 function tokenHash(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -144,7 +145,8 @@ export async function requestEmailChange(
   if (existingUser) return { success: false, error: "An account already uses that email address." };
 
   const limit = await consumeRateLimit(session.user.id, "change-email", 3, 15 * 60);
-  if (!limit.allowed) return { success: false, error: "Please wait before requesting another email change." };
+  if (!limit.allowed)
+    return { success: false, error: "Please wait before requesting another email change." };
 
   const token = randomBytes(32).toString("hex");
   const identifier = `change-email:${session.user.id}:${email}`;
@@ -163,7 +165,10 @@ export async function requestEmailChange(
   } catch (error) {
     console.error("Failed to send email-change verification", error);
     await prisma.verificationToken.deleteMany({ where: { identifier } });
-    return { success: false, error: "We couldn't send the verification email right now. Please try again." };
+    return {
+      success: false,
+      error: "We couldn't send the verification email right now. Please try again.",
+    };
   }
   return { success: true, data: { email } };
 }
@@ -173,7 +178,8 @@ export async function confirmEmailChange(input: {
   token: string;
 }): Promise<ActionResult<void>> {
   const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Sign in to confirm your new email address." };
+  if (!session?.user?.id)
+    return { success: false, error: "Sign in to confirm your new email address." };
   const parsed = z
     .object({ email: z.string().email().max(254), token: z.string().min(32) })
     .strict()
@@ -185,7 +191,10 @@ export async function confirmEmailChange(input: {
     where: { identifier_token: { identifier, token: tokenHash(parsed.data.token) } },
   });
   if (!verification || verification.expires < new Date()) {
-    return { success: false, error: "This email-change link has expired. Please request a new one." };
+    return {
+      success: false,
+      error: "This email-change link has expired. Please request a new one.",
+    };
   }
   const existingUser = await prisma.user.findUnique({ where: { email } });
   if (existingUser && existingUser.id !== session.user.id) {
@@ -209,9 +218,7 @@ export async function confirmEmailChange(input: {
   return { success: true, data: undefined };
 }
 
-export async function importExportedData(
-  input: unknown,
-): Promise<
+export async function importExportedData(input: unknown): Promise<
   ActionResult<{
     activities: number;
     focusSessions: number;
@@ -231,7 +238,14 @@ export async function importExportedData(
   try {
     const existingActivities = await prisma.activity.findMany({
       where: { userId: session.user.id },
-      select: { id: true, title: true, startTime: true, endTime: true, duration: true, categoryId: true },
+      select: {
+        id: true,
+        title: true,
+        startTime: true,
+        endTime: true,
+        duration: true,
+        categoryId: true,
+      },
     });
     const activityIdsByKey = new Map(
       existingActivities.map((activity) => [importedActivityKey(activity), activity.id]),
@@ -272,13 +286,24 @@ export async function importExportedData(
         activityCount += 1;
       } catch (error) {
         skippedActivities += 1;
-        console.error("Failed to import activity", { userId: session.user.id, sourceActivityId: activity.id, error });
+        console.error("Failed to import activity", {
+          userId: session.user.id,
+          sourceActivityId: activity.id,
+          error,
+        });
       }
     }
 
     const existingFocusSessions = await prisma.focusSession.findMany({
       where: { userId: session.user.id },
-      select: { id: true, title: true, status: true, startTime: true, endTime: true, duration: true },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        startTime: true,
+        endTime: true,
+        duration: true,
+      },
     });
     const focusIdsByKey = new Map(
       existingFocusSessions.map((focus) => [importedFocusSessionKey(focus), focus.id]),
@@ -301,7 +326,9 @@ export async function importExportedData(
           data: {
             userId: session.user.id,
             ...focusData,
-            activityId: focus.activityId ? importedActivityIds.get(focus.activityId) ?? null : null,
+            activityId: focus.activityId
+              ? (importedActivityIds.get(focus.activityId) ?? null)
+              : null,
             createdAt: new Date(focus.createdAt),
             updatedAt: new Date(focus.updatedAt),
           },
@@ -339,10 +366,14 @@ export async function importExportedData(
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
       return {
         success: false,
-        error: "This account is missing InterLog activity categories. Please contact support before importing.",
+        error:
+          "This account is missing InterLog activity categories. Please contact support before importing.",
       };
     }
-    return { success: false, error: "We couldn't import that file. Your existing data is unchanged." };
+    return {
+      success: false,
+      error: "We couldn't import that file. Your existing data is unchanged.",
+    };
   }
 }
 
@@ -350,6 +381,39 @@ export async function requestDataExport(): Promise<ActionResult<{ downloadUrl: s
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Unauthorized." };
   return { success: true, data: { downloadUrl: "/api/export" } };
+}
+
+export async function resetUserData(input: { confirmation: string }): Promise<ActionResult<void>> {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized." };
+  const parsed = ResetUserDataSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: "Type DELETE to reset your data." };
+
+  try {
+    await prisma.$transaction([
+      prisma.focusSession.deleteMany({ where: { userId: session.user.id } }),
+      prisma.activity.deleteMany({ where: { userId: session.user.id } }),
+      prisma.moodEntry.deleteMany({ where: { userId: session.user.id } }),
+      prisma.reflection.deleteMany({ where: { userId: session.user.id } }),
+      prisma.reflectionDay.deleteMany({ where: { userId: session.user.id } }),
+      prisma.insightFeedback.deleteMany({ where: { userId: session.user.id } }),
+      prisma.insight.deleteMany({ where: { userId: session.user.id } }),
+      prisma.wrappedSummary.deleteMany({ where: { userId: session.user.id } }),
+      prisma.guestMigration.deleteMany({ where: { userId: session.user.id } }),
+    ]);
+  } catch (error) {
+    console.error("Failed to reset user data", { userId: session.user.id, error });
+    return { success: false, error: "We couldn't reset your data right now. Please try again." };
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/timeline");
+  revalidatePath("/calendar");
+  revalidatePath("/reflection");
+  revalidatePath("/analytics");
+  revalidatePath("/wrapped");
+  revalidatePath("/settings");
+  return { success: true, data: undefined };
 }
 
 export async function deleteAccount(): Promise<ActionResult<void>> {

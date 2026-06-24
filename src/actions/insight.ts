@@ -31,17 +31,18 @@ export async function generateInsights(input: {
     where: { userId: session.user.id, startTime: { gte: since }, duration: { not: null } },
     include: { category: true },
   });
-  const reflectionDays = await prisma.reflectionDay.findMany({
+  const reflections = await prisma.reflection.findMany({
     where: {
       userId: session.user.id,
-      status: "COMPLETED",
       activityDate: { gte: format(since, "yyyy-MM-dd"), lte: format(new Date(), "yyyy-MM-dd") },
     },
-    select: { id: true, updatedAt: true },
+    select: { id: true, activityDate: true, updatedAt: true },
   });
+  const reflectionDaysCount = new Set(reflections.map((reflection) => reflection.activityDate))
+    .size;
   const revision = createHash("sha256")
     .update(
-      [...activities, ...reflectionDays]
+      [...activities, ...reflections]
         .map((item) => `${item.id}:${item.updatedAt.toISOString()}`)
         .join("|"),
     )
@@ -75,7 +76,7 @@ export async function generateInsights(input: {
         sessions: value.sessions,
       })),
       focusSessionsByHour: [],
-      reflectionDaysCount: reflectionDays.length,
+      reflectionDaysCount,
     });
     await prisma.insight.createMany({
       data: output.insights.map((insight) => ({
@@ -121,9 +122,7 @@ export async function recordInsightFeedback(input: {
   return { success: true, data: undefined };
 }
 
-export async function dismissInsight(input: {
-  insightId: string;
-}): Promise<ActionResult<void>> {
+export async function dismissInsight(input: { insightId: string }): Promise<ActionResult<void>> {
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Unauthorized." };
   const parsed = DismissInsightSchema.safeParse(input);

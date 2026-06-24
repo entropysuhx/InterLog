@@ -1,6 +1,15 @@
 "use client";
 
-import { Database, Download, Mail, ShieldCheck, Trash2, Upload, UserRound } from "lucide-react";
+import {
+  Database,
+  Download,
+  Mail,
+  RotateCcw,
+  ShieldCheck,
+  Trash2,
+  Upload,
+  UserRound,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
@@ -8,6 +17,7 @@ import {
   deleteAccount,
   importExportedData,
   requestEmailChange,
+  resetUserData,
   updateProfile,
   updateWeekStartsOn,
 } from "@/actions/user";
@@ -49,6 +59,10 @@ export default function SettingsPage() {
   const [fileImportPreview, setFileImportPreview] = useState<ImportPreview | null>(null);
   const [isImportingFile, setIsImportingFile] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [resetConfirmation, setResetConfirmation] = useState("");
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetStatus, setResetStatus] = useState("");
   const [email, setEmail] = useState("");
   const [emailStatus, setEmailStatus] = useState("");
   const [isRequestingEmailChange, setIsRequestingEmailChange] = useState(false);
@@ -216,7 +230,28 @@ export default function SettingsPage() {
     router.refresh();
   }
 
-  const isDataActionRunning = isImporting || isImportingFile || isExporting;
+  async function handleResetData() {
+    setIsResetting(true);
+    setResetStatus("");
+    try {
+      const result = await resetUserData({ confirmation: resetConfirmation });
+      if (!result.success) {
+        setResetStatus(result.error);
+        return;
+      }
+      setIsResetModalOpen(false);
+      setResetConfirmation("");
+      setResetStatus("Your InterLog data has been reset successfully.");
+      router.refresh();
+    } catch (error) {
+      console.error("Reset data request failed", error);
+      setResetStatus("We couldn't reset your data right now. Please try again.");
+    } finally {
+      setIsResetting(false);
+    }
+  }
+
+  const isDataActionRunning = isImporting || isImportingFile || isExporting || isResetting;
 
   return (
     <div className="mx-auto max-w-reading space-y-ds-20">
@@ -416,8 +451,19 @@ export default function SettingsPage() {
               </button>
             </>
           )}
+          {isAuthenticated && (
+            <button
+              type="button"
+              disabled={isDataActionRunning}
+              onClick={() => setIsResetModalOpen(true)}
+              className="flex min-h-touch-target items-center gap-ds-8 rounded-md border border-status-error px-ds-16 text-label text-status-error hover:bg-surface-hover disabled:text-text-disabled"
+            >
+              <RotateCcw size={16} aria-hidden="true" /> Reset My Data
+            </button>
+          )}
           <button
             type="button"
+            disabled={isDataActionRunning}
             onClick={() => {
               const message = isAuthenticated
                 ? "Permanently delete your InterLog account and all account data?"
@@ -519,14 +565,71 @@ export default function SettingsPage() {
           </div>
         </ModalShell>
       )}
+      {isResetModalOpen && (
+        <ModalShell
+          titleId="reset-data-title"
+          onClose={() => {
+            if (!isResetting) {
+              setIsResetModalOpen(false);
+              setResetConfirmation("");
+            }
+          }}
+        >
+          <div>
+            <h2 id="reset-data-title" className="text-heading-3 font-semibold text-text-primary">
+              Reset all data?
+            </h2>
+            <p className="mt-ds-8 text-body-sm text-text-secondary">
+              This will permanently remove all your tracked activities, focus sessions, reflections,
+              and insights. Your account and settings will remain.
+            </p>
+            <p className="mt-ds-12 text-body-sm font-[550] text-status-error">
+              This action cannot be undone.
+            </p>
+            <label className="mt-ds-20 block text-label text-text-secondary">
+              Type DELETE to confirm
+              <input
+                value={resetConfirmation}
+                disabled={isResetting}
+                onChange={(event) => setResetConfirmation(event.target.value)}
+                className="mt-ds-8 min-h-touch-target w-full rounded-md border border-border bg-background px-ds-12 text-body-sm text-text-primary"
+                autoComplete="off"
+              />
+            </label>
+          </div>
+          <div className="mt-ds-20 flex justify-end gap-ds-8">
+            <button
+              type="button"
+              disabled={isResetting}
+              onClick={() => {
+                setIsResetModalOpen(false);
+                setResetConfirmation("");
+              }}
+              className="min-h-touch-target rounded-md border border-border px-ds-16 text-label text-text-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={isResetting || resetConfirmation !== "DELETE"}
+              onClick={() => void handleResetData()}
+              className="min-h-touch-target rounded-md border border-status-error px-ds-16 text-label font-[550] text-status-error hover:bg-surface-hover disabled:border-border disabled:text-text-disabled"
+            >
+              Reset My Data
+            </button>
+          </div>
+        </ModalShell>
+      )}
       {(isDataActionRunning || isRequestingEmailChange) && (
         <ActionLoadingOverlay
           title={
-            isRequestingEmailChange
-              ? "Sending verification email..."
-              : isExporting
-                ? "Preparing your export..."
-                : "Importing your data..."
+            isResetting
+              ? "Resetting your data..."
+              : isRequestingEmailChange
+                ? "Sending verification email..."
+                : isExporting
+                  ? "Preparing your export..."
+                  : "Importing your data..."
           }
           subtitle="This may take a few seconds."
         />
@@ -549,6 +652,13 @@ export default function SettingsPage() {
           message={emailStatus}
           tone={emailStatus.startsWith("We sent") ? "success" : "error"}
           onDismiss={() => setEmailStatus("")}
+        />
+      )}
+      {resetStatus && (
+        <ActionToast
+          message={resetStatus}
+          tone={resetStatus.startsWith("Your InterLog") ? "success" : "error"}
+          onDismiss={() => setResetStatus("")}
         />
       )}
     </div>

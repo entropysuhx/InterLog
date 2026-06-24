@@ -17,7 +17,12 @@ export async function getProductSnapshot(): Promise<{
     await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
-        select: { name: true, email: true, image: true, preference: { select: { weekStartsOn: true } } },
+        select: {
+          name: true,
+          email: true,
+          image: true,
+          preference: { select: { weekStartsOn: true } },
+        },
       }),
       prisma.activity.findMany({
         where: { userId },
@@ -28,7 +33,7 @@ export async function getProductSnapshot(): Promise<{
         where: { userId, status: "ACTIVE" },
         orderBy: { startTime: "desc" },
       }),
-      prisma.reflectionDay.count({ where: { userId, status: "COMPLETED" } }),
+      prisma.reflection.groupBy({ by: ["activityDate"], where: { userId } }),
       prisma.insight.findMany({
         where: { userId, dismissedAt: null },
         orderBy: { createdAt: "desc" },
@@ -57,7 +62,7 @@ export async function getProductSnapshot(): Promise<{
             activityId: activeFocusSession.activityId,
           }
         : null,
-      reflectionDays,
+      reflectionDays: reflectionDays.length,
       insights: insights.map((insight) => ({
         id: insight.id,
         observation: insight.observation,
