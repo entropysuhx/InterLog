@@ -147,8 +147,11 @@ export default function SettingsPage() {
       }
       setIsFileImportModalOpen(false);
       setFileImportPreview(null);
+      const skipped = result.data.skippedActivities + result.data.skippedFocusSessions;
       setImportStatus(
-        `Imported ${result.data.activities} activities and ${result.data.focusSessions} focus sessions.`,
+        skipped > 0
+          ? `Imported ${result.data.activities} activities and ${result.data.focusSessions} focus sessions. ${skipped} records could not be imported.`
+          : `Imported ${result.data.activities} activities and ${result.data.focusSessions} focus sessions.`,
       );
       router.refresh();
     } catch (error) {

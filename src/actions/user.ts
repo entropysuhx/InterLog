@@ -211,7 +211,14 @@ export async function confirmEmailChange(input: {
 
 export async function importExportedData(
   input: unknown,
-): Promise<ActionResult<{ activities: number; focusSessions: number }>> {
+): Promise<
+  ActionResult<{
+    activities: number;
+    focusSessions: number;
+    skippedActivities: number;
+    skippedFocusSessions: number;
+  }>
+> {
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Unauthorized." };
   const parsed = ImportExportDataSchema.safeParse(input);
@@ -222,32 +229,33 @@ export async function importExportedData(
     return { success: false, error: "Choose a valid InterLog export file." };
   }
   try {
-    const imported = await prisma.$transaction(async (transaction) => {
-      const existingActivities = await transaction.activity.findMany({
-        where: { userId: session.user.id },
-        select: { id: true, title: true, startTime: true, endTime: true, duration: true, categoryId: true },
-      });
-      const activityIdsByKey = new Map(
-        existingActivities.map((activity) => [importedActivityKey(activity), activity.id]),
-      );
-      const importedActivityIds = new Map<string, string>();
-      let activityCount = 0;
+    const existingActivities = await prisma.activity.findMany({
+      where: { userId: session.user.id },
+      select: { id: true, title: true, startTime: true, endTime: true, duration: true, categoryId: true },
+    });
+    const activityIdsByKey = new Map(
+      existingActivities.map((activity) => [importedActivityKey(activity), activity.id]),
+    );
+    const importedActivityIds = new Map<string, string>();
+    let activityCount = 0;
+    let skippedActivities = 0;
 
-      for (const activity of parsed.data.activities) {
-        const activityData = {
-          title: activity.title,
-          startTime: new Date(activity.startTime),
-          endTime: activity.endTime ? new Date(activity.endTime) : null,
-          duration: activity.duration,
-          categoryId: activity.categoryId,
-        };
-        const key = importedActivityKey(activityData);
-        const existingId = activityIdsByKey.get(key);
-        if (existingId) {
-          importedActivityIds.set(activity.id, existingId);
-          continue;
-        }
-        const created = await transaction.activity.create({
+    for (const activity of parsed.data.activities) {
+      const activityData = {
+        title: activity.title,
+        startTime: new Date(activity.startTime),
+        endTime: activity.endTime ? new Date(activity.endTime) : null,
+        duration: activity.duration,
+        categoryId: activity.categoryId,
+      };
+      const key = importedActivityKey(activityData);
+      const existingId = activityIdsByKey.get(key);
+      if (existingId) {
+        importedActivityIds.set(activity.id, existingId);
+        continue;
+      }
+      try {
+        const created = await prisma.activity.create({
           data: {
             userId: session.user.id,
             ...activityData,
@@ -262,28 +270,34 @@ export async function importExportedData(
         activityIdsByKey.set(key, created.id);
         importedActivityIds.set(activity.id, created.id);
         activityCount += 1;
+      } catch (error) {
+        skippedActivities += 1;
+        console.error("Failed to import activity", { userId: session.user.id, sourceActivityId: activity.id, error });
       }
+    }
 
-      const existingFocusSessions = await transaction.focusSession.findMany({
-        where: { userId: session.user.id },
-        select: { id: true, title: true, status: true, startTime: true, endTime: true, duration: true },
-      });
-      const focusIdsByKey = new Map(
-        existingFocusSessions.map((focus) => [importedFocusSessionKey(focus), focus.id]),
-      );
-      let focusSessionCount = 0;
+    const existingFocusSessions = await prisma.focusSession.findMany({
+      where: { userId: session.user.id },
+      select: { id: true, title: true, status: true, startTime: true, endTime: true, duration: true },
+    });
+    const focusIdsByKey = new Map(
+      existingFocusSessions.map((focus) => [importedFocusSessionKey(focus), focus.id]),
+    );
+    let focusSessionCount = 0;
+    let skippedFocusSessions = 0;
 
-      for (const focus of parsed.data.focusSessions) {
-        const focusData = {
-          title: focus.title,
-          status: focus.status,
-          startTime: new Date(focus.startTime),
-          endTime: focus.endTime ? new Date(focus.endTime) : null,
-          duration: focus.duration,
-        };
-        const key = importedFocusSessionKey(focusData);
-        if (focusIdsByKey.has(key)) continue;
-        const created = await transaction.focusSession.create({
+    for (const focus of parsed.data.focusSessions) {
+      const focusData = {
+        title: focus.title,
+        status: focus.status,
+        startTime: new Date(focus.startTime),
+        endTime: focus.endTime ? new Date(focus.endTime) : null,
+        duration: focus.duration,
+      };
+      const key = importedFocusSessionKey(focusData);
+      if (focusIdsByKey.has(key)) continue;
+      try {
+        const created = await prisma.focusSession.create({
           data: {
             userId: session.user.id,
             ...focusData,
@@ -295,10 +309,22 @@ export async function importExportedData(
         });
         focusIdsByKey.set(key, created.id);
         focusSessionCount += 1;
+      } catch (error) {
+        skippedFocusSessions += 1;
+        console.error("Failed to import focus session", {
+          userId: session.user.id,
+          sourceFocusSessionId: focus.id,
+          error,
+        });
       }
+    }
 
-      return { activities: activityCount, focusSessions: focusSessionCount };
-    });
+    const imported = {
+      activities: activityCount,
+      focusSessions: focusSessionCount,
+      skippedActivities,
+      skippedFocusSessions,
+    };
     revalidatePath("/dashboard");
     revalidatePath("/timeline");
     revalidatePath("/calendar");
