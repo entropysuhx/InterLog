@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
+  addMonths,
   addDays,
   eachDayOfInterval,
   endOfMonth,
@@ -11,12 +12,14 @@ import {
   startOfDay,
   startOfMonth,
   startOfWeek,
+  subMonths,
   subDays,
 } from "date-fns";
 
 import { useProductData } from "@/components/providers/ProductDataProvider";
 import TimelineDetailDialog from "@/components/timeline/TimelineDetailDialog";
 import { getTimelineActivitiesForDate } from "@/lib/timeline/layout";
+import { getTimelinePeriodLabel } from "@/lib/timeline/period-label";
 import TimelineView from "@/components/timeline/TimelineView";
 import { formatDuration } from "@/lib/utils";
 import type { ActivityView } from "@/types";
@@ -55,6 +58,7 @@ export default function TimelinePage() {
   const weeklyEnd = endOfWeek(date, { weekStartsOn });
   const monthlyStart = startOfMonth(date);
   const monthlyEnd = endOfMonth(date);
+  const periodLabel = getTimelinePeriodLabel(view, date, weekStartsOn);
   const weeklyGrouped = useMemo(
     () => groupActivitiesByDate(activities, weeklyStart, weeklyEnd),
     [activities, weeklyStart, weeklyEnd],
@@ -114,7 +118,9 @@ export default function TimelinePage() {
               type="button"
               onClick={() =>
                 setDate((current) =>
-                  subDays(current, view === "monthly" ? 30 : view === "weekly" ? 7 : 1),
+                  view === "monthly"
+                    ? subMonths(current, 1)
+                    : subDays(current, view === "weekly" ? 7 : 1),
                 )
               }
               className="flex min-h-touch-target items-center gap-ds-8 rounded-md px-ds-12 text-label text-text-secondary hover:bg-surface-hover"
@@ -127,13 +133,15 @@ export default function TimelinePage() {
               onClick={() => setDate(startOfDay(new Date()))}
               className="text-label font-[550] text-text-primary hover:underline"
             >
-              {view === "daily" ? "Today" : view === "weekly" ? "This Week" : "This Month"}
+              {periodLabel}
             </button>
             <button
               type="button"
               onClick={() =>
                 setDate((current) =>
-                  addDays(current, view === "monthly" ? 30 : view === "weekly" ? 7 : 1),
+                  view === "monthly"
+                    ? addMonths(current, 1)
+                    : addDays(current, view === "weekly" ? 7 : 1),
                 )
               }
               className="flex min-h-touch-target items-center gap-ds-8 rounded-md px-ds-12 text-label text-text-secondary hover:bg-surface-hover"
@@ -158,7 +166,8 @@ export default function TimelinePage() {
                 Week of {format(weeklyStart, "MMM d")}
               </h2>
               <p className="mb-ds-16 text-body-sm text-text-secondary">
-                You logged {weeklyActivityCount} activities totaling {formatDuration(weeklyDuration)} this week.
+                You logged {weeklyActivityCount} activities totaling{" "}
+                {formatDuration(weeklyDuration)} this week.
               </p>
               <div className="space-y-ds-8">
                 {weeklyGrouped.map((day) => (
@@ -190,7 +199,8 @@ export default function TimelinePage() {
                 {format(date, "MMMM yyyy")}
               </h2>
               <p className="mb-ds-16 text-body-sm text-text-secondary">
-                You logged {monthlyActivityCount} activities totaling {formatDuration(monthlyDuration)} this month.
+                You logged {monthlyActivityCount} activities totaling{" "}
+                {formatDuration(monthlyDuration)} this month.
               </p>
               <div className="space-y-ds-8">
                 {monthlyGrouped.map((day) => (
