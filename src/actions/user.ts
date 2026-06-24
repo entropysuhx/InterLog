@@ -9,8 +9,9 @@ import { z } from "zod";
 import { auth, signOut } from "@/lib/auth";
 import { sendEmailChangeVerification } from "@/lib/auth/email";
 import { prisma } from "@/lib/db";
+import { ImportExportDataSchema } from "@/lib/import/export-schema";
 import { consumeRateLimit } from "@/lib/rate-limit";
-import { CATEGORY_IDS, type ActionResult } from "@/types";
+import { type ActionResult } from "@/types";
 
 const UpdatePreferencesSchema = z
   .object({
@@ -33,48 +34,6 @@ const UpdateWeekStartsOnSchema = z
   .strict();
 
 const ChangeEmailSchema = z.object({ email: z.string().trim().email().max(254) }).strict();
-
-const ImportedActivitySchema = z
-  .object({
-    id: z.string().cuid(),
-    userId: z.string().optional(),
-    title: z.string().trim().min(1).max(200),
-    notes: z.string().max(2000).nullable().optional(),
-    startTime: z.string().datetime(),
-    endTime: z.string().datetime().nullable(),
-    duration: z.number().int().nonnegative().nullable(),
-    categoryId: z.string().refine((value) => Object.values(CATEGORY_IDS).includes(value)),
-    categorizationSource: z.enum(["AI", "USER", "FALLBACK"]),
-    aiConfidence: z.number().min(0).max(1).nullable(),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
-  })
-  .strict();
-
-const ImportedFocusSessionSchema = z
-  .object({
-    id: z.string().cuid(),
-    userId: z.string().optional(),
-    activityId: z.string().cuid().nullable(),
-    title: z.string().trim().min(1).max(200),
-    status: z.enum(["ACTIVE", "COMPLETED", "CANCELLED"]),
-    startTime: z.string().datetime(),
-    endTime: z.string().datetime().nullable(),
-    duration: z.number().int().nonnegative().nullable(),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
-  })
-  .strict();
-
-const ImportExportDataSchema = z
-  .object({
-    exportedAt: z.string().datetime(),
-    activities: z.array(ImportedActivitySchema).max(5000),
-    focusSessions: z.array(ImportedFocusSessionSchema).max(2000),
-    wrappedSummaries: z.unknown().optional(),
-    privacyNote: z.string().optional(),
-  })
-  .strict();
 
 function tokenHash(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -256,7 +215,12 @@ export async function importExportedData(
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Unauthorized." };
   const parsed = ImportExportDataSchema.safeParse(input);
-  if (!parsed.success) return { success: false, error: "Choose a valid InterLog export file." };
+  if (!parsed.success) {
+    console.error("Invalid InterLog export file", {
+      issues: parsed.error.issues.map((issue) => ({ code: issue.code, path: issue.path })),
+    });
+    return { success: false, error: "Choose a valid InterLog export file." };
+  }
   try {
     const imported = await prisma.$transaction(async (transaction) => {
       const existingActivities = await transaction.activity.findMany({
