@@ -68,15 +68,17 @@ export async function saveReflection(
     revalidatePath("/reflection");
     revalidatePath("/dashboard");
     revalidatePath("/analytics");
+    revalidatePath("/wrapped");
     return { success: true, data: { savedCount: parsed.data.answers.length } };
   } catch {
-    return { success: false, error: "We could not save this reflection. Your draft is still here." };
+    return {
+      success: false,
+      error: "We could not save this reflection. Your draft is still here.",
+    };
   }
 }
 
-export async function skipReflection(input: {
-  activityDate: string;
-}): Promise<ActionResult<void>> {
+export async function skipReflection(input: { activityDate: string }): Promise<ActionResult<void>> {
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Unauthorized." };
   const parsed = SkipReflectionSchema.safeParse(input);

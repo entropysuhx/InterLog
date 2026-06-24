@@ -14,7 +14,7 @@ type ReflectionCardProps = {
   date: string;
   isAuthenticated?: boolean;
   savedReflections?: ReflectionView[];
-  onSaved?: () => void;
+  onSaved?: () => void | Promise<void>;
   compact?: boolean;
 };
 
@@ -105,7 +105,7 @@ export default function ReflectionCard({
       setStatus("Reflection saved.");
       setSavedAt(new Date().toISOString());
       setIsEditing(false);
-      onSaved?.();
+      await onSaved?.();
     } catch (error) {
       console.error("Reflection save failed", error);
       setStatus("We couldn't save this reflection right now. Your draft is still here.");

@@ -18,7 +18,7 @@ import {
 type FocusTimerProps = {
   session: GuestFocusSession | FocusSessionView;
   isAuthenticated?: boolean;
-  onComplete: () => void;
+  onComplete: () => void | Promise<void>;
 };
 
 export default function FocusTimer({
@@ -75,7 +75,7 @@ export default function FocusTimer({
         notes: notes.trim() || null,
       });
     }
-    onComplete();
+    await onComplete();
   }
 
   async function handleCancelSession() {
@@ -84,7 +84,7 @@ export default function FocusTimer({
     } else {
       guestStore.cancelFocusSession(session.id);
     }
-    onComplete();
+    await onComplete();
   }
 
   return (

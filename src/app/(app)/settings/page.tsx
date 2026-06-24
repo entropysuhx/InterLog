@@ -10,7 +10,6 @@ import {
   Upload,
   UserRound,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
 import {
@@ -31,6 +30,7 @@ import { guestStore } from "@/lib/guest/store";
 type ImportPreview = {
   activities: number;
   focusSessions: number;
+  reflections: number;
   data: unknown;
 };
 
@@ -41,13 +41,13 @@ function getImportPreview(value: unknown): ImportPreview | null {
   return {
     activities: record.activities.length,
     focusSessions: record.focusSessions.length,
+    reflections: Array.isArray(record.reflections) ? record.reflections.length : 0,
     data: value,
   };
 }
 
 export default function SettingsPage() {
-  const { isAuthenticated, userName, userImage, weekStartsOn } = useProductData();
-  const router = useRouter();
+  const { isAuthenticated, userName, userImage, weekStartsOn, refresh } = useProductData();
   const [displayName, setDisplayName] = useState(userName ?? "");
   const [avatar, setAvatar] = useState<string | null>(userImage);
   const [profileStatus, setProfileStatus] = useState("");
@@ -97,7 +97,7 @@ export default function SettingsPage() {
       return;
     }
     setProfileStatus("Profile updated.");
-    router.refresh();
+    await refresh();
   }
 
   async function handleExport() {
@@ -138,7 +138,7 @@ export default function SettingsPage() {
       }
       setHasGuestData(guestStore.hasMigrationData());
       setImportStatus(`Successfully imported ${result.importedCount} records.`);
-      router.refresh();
+      await refresh();
     } catch (error) {
       console.error("Manual guest data import request failed", error);
       setImportStatus("We couldn't import your local data right now. Please try again.");
@@ -179,13 +179,16 @@ export default function SettingsPage() {
       }
       setIsFileImportModalOpen(false);
       setFileImportPreview(null);
-      const skipped = result.data.skippedActivities + result.data.skippedFocusSessions;
+      const skipped =
+        result.data.skippedActivities +
+        result.data.skippedFocusSessions +
+        result.data.skippedReflections;
       setImportStatus(
         skipped > 0
-          ? `Imported ${result.data.activities} activities and ${result.data.focusSessions} focus sessions. ${skipped} records could not be imported.`
-          : `Imported ${result.data.activities} activities and ${result.data.focusSessions} focus sessions.`,
+          ? `Imported ${result.data.activities} activities, ${result.data.focusSessions} focus sessions, and ${result.data.reflections} reflections. ${skipped} records could not be imported.`
+          : `Imported ${result.data.activities} activities, ${result.data.focusSessions} focus sessions, and ${result.data.reflections} reflections.`,
       );
-      router.refresh();
+      await refresh();
     } catch (error) {
       console.error("Export file import request failed", error);
       setImportStatus("We couldn't import that file right now. Please try again.");
@@ -227,7 +230,7 @@ export default function SettingsPage() {
       return;
     }
     setWeekStartStatus("Week start preference saved.");
-    router.refresh();
+    await refresh();
   }
 
   async function handleResetData() {
@@ -242,7 +245,7 @@ export default function SettingsPage() {
       setIsResetModalOpen(false);
       setResetConfirmation("");
       setResetStatus("Your InterLog data has been reset successfully.");
-      router.refresh();
+      await refresh();
     } catch (error) {
       console.error("Reset data request failed", error);
       setResetStatus("We couldn't reset your data right now. Please try again.");
@@ -535,9 +538,9 @@ export default function SettingsPage() {
               Import InterLog data?
             </h2>
             <p className="mt-ds-8 text-body-sm text-text-secondary">
-              This file contains {fileImportPreview.activities} activities and{" "}
-              {fileImportPreview.focusSessions} focus sessions. Existing matching entries will be
-              kept.
+              This file contains {fileImportPreview.activities} activities,{" "}
+              {fileImportPreview.focusSessions} focus sessions, and {fileImportPreview.reflections}{" "}
+              reflections. Existing matching entries will be kept.
             </p>
             {importStatus && (
               <p role="status" className="mt-ds-12 text-body-sm text-status-error">

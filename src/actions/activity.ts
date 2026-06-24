@@ -31,15 +31,18 @@ export async function createActivity(
   try {
     const result = await createActivityForUser(session.user.id, parsed.data);
     revalidatePath("/dashboard");
+    revalidatePath("/timeline");
     revalidatePath("/calendar");
     revalidatePath("/analytics");
+    revalidatePath("/wrapped");
     return { success: true, data: result };
   } catch (error) {
     console.error("Failed to create activity", { userId: session.user.id, error });
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
       return {
         success: false,
-        error: "We couldn't save this activity because its category is unavailable. Please refresh and try again.",
+        error:
+          "We couldn't save this activity because its category is unavailable. Please refresh and try again.",
       };
     }
     return { success: false, error: "We could not save this entry. Your draft is still here." };
@@ -56,7 +59,12 @@ export async function updateActivity(
   const startTime = new Date(parsed.data.startTime);
   const endTime = parsed.data.endTime ? new Date(parsed.data.endTime) : null;
   try {
-    const overlaps = await findActivityOverlaps(session.user.id, startTime, endTime, parsed.data.id);
+    const overlaps = await findActivityOverlaps(
+      session.user.id,
+      startTime,
+      endTime,
+      parsed.data.id,
+    );
     const activity = await prisma.activity.update({
       where: { id_userId: { id: parsed.data.id, userId: session.user.id } },
       data: {
@@ -65,16 +73,16 @@ export async function updateActivity(
         startTime,
         endTime,
         duration: endTime ? calculateDuration(startTime, endTime) : null,
-        categoryId: parsed.data.categoryKey
-          ? CATEGORY_IDS[parsed.data.categoryKey]
-          : undefined,
+        categoryId: parsed.data.categoryKey ? CATEGORY_IDS[parsed.data.categoryKey] : undefined,
         categorizationSource: parsed.data.categoryKey ? "USER" : undefined,
       },
       include: { category: true },
     });
     revalidatePath("/dashboard");
+    revalidatePath("/timeline");
     revalidatePath("/calendar");
     revalidatePath("/analytics");
+    revalidatePath("/wrapped");
     return {
       success: true,
       data: {
@@ -100,8 +108,10 @@ export async function deleteActivity(input: { id: string }): Promise<ActionResul
       where: { id_userId: { id: parsed.data.id, userId: session.user.id } },
     });
     revalidatePath("/dashboard");
+    revalidatePath("/timeline");
     revalidatePath("/calendar");
     revalidatePath("/analytics");
+    revalidatePath("/wrapped");
     return { success: true, data: undefined };
   } catch {
     return { success: false, error: "Activity not found." };
@@ -127,7 +137,9 @@ export async function updateActivityCategory(input: {
       include: { category: true },
     });
     revalidatePath("/dashboard");
+    revalidatePath("/timeline");
     revalidatePath("/analytics");
+    revalidatePath("/wrapped");
     return { success: true, data: toActivityView(activity) };
   } catch {
     return { success: false, error: "Activity not found." };

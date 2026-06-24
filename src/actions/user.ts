@@ -72,6 +72,10 @@ function importedFocusSessionKey(session: {
   ].join("|");
 }
 
+function importedReflectionKey(reflection: { activityDate: string; prompt: string }): string {
+  return `${reflection.activityDate}|${reflection.prompt}`;
+}
+
 export async function updateProfile(
   input: z.infer<typeof UpdateProfileSchema>,
 ): Promise<ActionResult<{ name: string | null; image: string | null }>> {
@@ -222,8 +226,10 @@ export async function importExportedData(input: unknown): Promise<
   ActionResult<{
     activities: number;
     focusSessions: number;
+    reflections: number;
     skippedActivities: number;
     skippedFocusSessions: number;
+    skippedReflections: number;
   }>
 > {
   const session = await auth();
@@ -346,15 +352,72 @@ export async function importExportedData(input: unknown): Promise<
       }
     }
 
+    const existingReflections = await prisma.reflection.findMany({
+      where: { userId: session.user.id },
+      select: { activityDate: true, prompt: true },
+    });
+    const reflectionKeys = new Set(existingReflections.map(importedReflectionKey));
+    const reflectionPromptsByDate = new Map<string, string[]>();
+    let reflectionCount = 0;
+    let skippedReflections = 0;
+
+    for (const reflection of parsed.data.reflections) {
+      const key = importedReflectionKey(reflection);
+      const prompts = reflectionPromptsByDate.get(reflection.activityDate) ?? [];
+      if (!prompts.includes(reflection.prompt)) prompts.push(reflection.prompt);
+      reflectionPromptsByDate.set(reflection.activityDate, prompts);
+
+      if (reflectionKeys.has(key)) continue;
+      try {
+        await prisma.reflection.create({
+          data: {
+            userId: session.user.id,
+            activityDate: reflection.activityDate,
+            prompt: reflection.prompt,
+            answer: reflection.answer,
+            createdAt: new Date(reflection.createdAt),
+            updatedAt: new Date(reflection.updatedAt),
+          },
+        });
+        reflectionKeys.add(key);
+        reflectionCount += 1;
+      } catch (error) {
+        skippedReflections += 1;
+        console.error("Failed to import reflection", {
+          userId: session.user.id,
+          sourceReflectionId: reflection.id,
+          error,
+        });
+      }
+    }
+
+    for (const [activityDate, prompts] of reflectionPromptsByDate) {
+      await prisma.reflectionDay.upsert({
+        where: { userId_activityDate: { userId: session.user.id, activityDate } },
+        update: { status: "COMPLETED", completedAt: new Date() },
+        create: {
+          userId: session.user.id,
+          activityDate,
+          primaryPrompt: prompts[0],
+          optionalPrompts: prompts.slice(1),
+          status: "COMPLETED",
+          completedAt: new Date(),
+        },
+      });
+    }
+
     const imported = {
       activities: activityCount,
       focusSessions: focusSessionCount,
+      reflections: reflectionCount,
       skippedActivities,
       skippedFocusSessions,
+      skippedReflections,
     };
     revalidatePath("/dashboard");
     revalidatePath("/timeline");
     revalidatePath("/calendar");
+    revalidatePath("/reflection");
     revalidatePath("/analytics");
     revalidatePath("/wrapped");
     return { success: true, data: imported };

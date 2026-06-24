@@ -36,11 +36,24 @@ const ImportedFocusSessionSchema = z
   })
   .strict();
 
+const ImportedReflectionSchema = z
+  .object({
+    id: ExportRecordIdSchema,
+    userId: z.string().optional(),
+    activityDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    prompt: z.string().trim().min(1).max(500),
+    answer: z.string().trim().min(1).max(5000),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .strict();
+
 export const ImportExportDataSchema = z
   .object({
     exportedAt: z.string().datetime(),
     activities: z.array(ImportedActivitySchema).max(5000),
     focusSessions: z.array(ImportedFocusSessionSchema).max(2000),
+    reflections: z.array(ImportedReflectionSchema).max(1000).optional().default([]),
     wrappedSummaries: z.unknown().optional(),
     privacyNote: z.string().optional(),
   })

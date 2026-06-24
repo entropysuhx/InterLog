@@ -39,9 +39,34 @@ describe("InterLog export import schema", () => {
         },
       ],
       wrappedSummaries: [],
+      privacyNote: "Mood entries are intentionally excluded.",
+      reflections: [
+        {
+          id: "reflection_b658bdc30cb84fc38b15f0a774f42e1d",
+          userId: "cmqnxbakh0000l5046htxnx0x",
+          activityDate: "2026-06-10",
+          prompt: "What felt meaningful today?",
+          answer: "Finishing the first version of the timeline.",
+          createdAt: "2026-06-10T12:00:00.000Z",
+          updatedAt: "2026-06-10T12:00:00.000Z",
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.reflections).toHaveLength(1);
+  });
+
+  it("accepts older exports that intentionally omitted reflections", () => {
+    const result = ImportExportDataSchema.safeParse({
+      exportedAt,
+      activities: [],
+      focusSessions: [],
+      wrappedSummaries: [],
       privacyNote: "Reflection answers and mood entries are intentionally excluded.",
     });
 
     expect(result.success).toBe(true);
+    if (result.success) expect(result.data.reflections).toEqual([]);
   });
 });

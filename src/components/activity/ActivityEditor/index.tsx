@@ -18,7 +18,7 @@ type ActivityEditorProps = {
   initialStartTime?: string;
   initialEndTime?: string | null;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: () => void | Promise<void>;
 };
 
 function toLocalInput(value: string | Date): string {
@@ -129,7 +129,7 @@ export default function ActivityEditor({
         });
       }
 
-      onSaved();
+      await onSaved();
       onClose();
     } finally {
       setIsSaving(false);
@@ -149,7 +149,7 @@ export default function ActivityEditor({
       } else {
         guestStore.deleteActivity(activity.id);
       }
-      onSaved();
+      await onSaved();
       onClose();
     } finally {
       setIsSaving(false);

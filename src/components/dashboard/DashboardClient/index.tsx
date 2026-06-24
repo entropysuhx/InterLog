@@ -48,9 +48,7 @@ export default function DashboardClient() {
         <p className="text-body-sm text-text-muted">
           {new Date().toLocaleDateString(undefined, { dateStyle: "full" })}
         </p>
-        <h1 className="mt-ds-4 text-heading-2 font-[650] text-text-primary">
-          {welcomeCopy}
-        </h1>
+        <h1 className="mt-ds-4 text-heading-2 font-[650] text-text-primary">{welcomeCopy}</h1>
         <p className="mt-ds-4 text-body-sm text-text-secondary">
           What are you going to track today?
         </p>
@@ -91,7 +89,7 @@ export default function DashboardClient() {
             } else {
               guestStore.createFocusSession(title);
             }
-            refresh();
+            await refresh();
           }}
         />
       )}

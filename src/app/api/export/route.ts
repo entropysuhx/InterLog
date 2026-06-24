@@ -5,9 +5,10 @@ export async function GET(): Promise<Response> {
   const session = await auth();
   if (!session?.user?.id) return new Response("Unauthorized", { status: 401 });
   const userId = session.user.id;
-  const [activities, focusSessions, wrappedSummaries] = await Promise.all([
+  const [activities, focusSessions, reflections, wrappedSummaries] = await Promise.all([
     prisma.activity.findMany({ where: { userId } }),
     prisma.focusSession.findMany({ where: { userId } }),
+    prisma.reflection.findMany({ where: { userId } }),
     prisma.wrappedSummary.findMany({ where: { userId } }),
   ]);
   const body = JSON.stringify(
@@ -15,8 +16,9 @@ export async function GET(): Promise<Response> {
       exportedAt: new Date().toISOString(),
       activities,
       focusSessions,
+      reflections,
       wrappedSummaries,
-      privacyNote: "Reflection answers and mood entries are intentionally excluded.",
+      privacyNote: "Mood entries are intentionally excluded.",
     },
     null,
     2,

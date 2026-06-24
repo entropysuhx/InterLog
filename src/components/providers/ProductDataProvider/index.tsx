@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useMemo } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useGuest } from "@/hooks/useGuest";
@@ -31,6 +31,37 @@ export default function ProductDataProvider({
 }) {
   const router = useRouter();
   const guest = useGuest();
+  const [authenticatedData, setAuthenticatedData] = useState({
+    snapshot: initialSnapshot,
+    userName,
+    userImage,
+  });
+
+  useEffect(() => {
+    setAuthenticatedData({ snapshot: initialSnapshot, userName, userImage });
+  }, [initialSnapshot, userImage, userName]);
+
+  const refresh = useCallback(async () => {
+    if (!isAuthenticated) {
+      guest.refresh();
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/product-snapshot", { cache: "no-store" });
+      if (!response.ok) throw new Error(`Snapshot request failed with ${response.status}.`);
+      const next = (await response.json()) as {
+        snapshot: ProductSnapshot;
+        userName: string | null;
+        userImage: string | null;
+      };
+      setAuthenticatedData(next);
+    } catch (error) {
+      console.error("Failed to refresh product data", error);
+    } finally {
+      router.refresh();
+    }
+  }, [guest, isAuthenticated, router]);
   const guestActivities = useMemo<ActivityView[]>(
     () =>
       guest.activities.map((activity) => ({
@@ -45,14 +76,14 @@ export default function ProductDataProvider({
   );
 
   const value: ProductDataContextValue =
-    isAuthenticated && initialSnapshot
+    isAuthenticated && authenticatedData.snapshot
       ? {
-          ...initialSnapshot,
+          ...authenticatedData.snapshot,
           isAuthenticated: true,
           isReady: true,
-          userName,
-          userImage,
-          refresh: () => router.refresh(),
+          userName: authenticatedData.userName,
+          userImage: authenticatedData.userImage,
+          refresh,
         }
       : {
           activities: guestActivities,
@@ -71,7 +102,7 @@ export default function ProductDataProvider({
           userName: null,
           userImage: null,
           weekStartsOn: 1,
-          refresh: guest.refresh,
+          refresh,
         };
 
   return <ProductDataContext.Provider value={value}>{children}</ProductDataContext.Provider>;
