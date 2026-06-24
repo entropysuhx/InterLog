@@ -2,6 +2,9 @@ import { z } from "zod";
 
 import { CategoryKeySchema } from "@/types/category";
 
+// Guest migrations preserve existing local IDs, which predate database-generated CUIDs.
+export const ActivityIdSchema = z.string().trim().min(1).max(128);
+
 const ActivityBaseSchema = z
   .object({
     title: z.string().trim().min(1).max(200),
@@ -18,17 +21,17 @@ export const CreateActivitySchema = ActivityBaseSchema.refine(
 );
 
 export const UpdateActivitySchema = ActivityBaseSchema.extend({
-  id: z.string().cuid(),
-}).refine(
-  (value) => !value.endTime || new Date(value.endTime) > new Date(value.startTime),
-  { message: "End time must be after start time.", path: ["endTime"] },
-);
+  id: ActivityIdSchema,
+}).refine((value) => !value.endTime || new Date(value.endTime) > new Date(value.startTime), {
+  message: "End time must be after start time.",
+  path: ["endTime"],
+});
 
-export const DeleteActivitySchema = z.object({ id: z.string().cuid() }).strict();
+export const DeleteActivitySchema = z.object({ id: ActivityIdSchema }).strict();
 
 export const UpdateActivityCategorySchema = z
   .object({
-    id: z.string().cuid(),
+    id: ActivityIdSchema,
     categoryKey: CategoryKeySchema,
   })
   .strict();

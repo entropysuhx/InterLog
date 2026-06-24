@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { CreateActivitySchema } from "@/types";
+import {
+  CreateActivitySchema,
+  DeleteActivitySchema,
+  UpdateActivityCategorySchema,
+  UpdateActivitySchema,
+} from "@/types";
 
 describe("CreateActivitySchema", () => {
   const valid = {
@@ -29,5 +34,19 @@ describe("CreateActivitySchema", () => {
   it("rejects unknown fields", () => {
     expect(CreateActivitySchema.safeParse({ ...valid, userId: "attacker" }).success).toBe(false);
   });
-});
 
+  it("accepts legacy guest activity IDs for authenticated edits and deletes", () => {
+    const legacyId = "activity_b658bdc30cb84fc38b15f0a774f42e1d";
+
+    expect(UpdateActivitySchema.safeParse({ ...valid, id: legacyId }).success).toBe(true);
+    expect(DeleteActivitySchema.safeParse({ id: legacyId }).success).toBe(true);
+    expect(
+      UpdateActivityCategorySchema.safeParse({ id: legacyId, categoryKey: "deep-work" }).success,
+    ).toBe(true);
+  });
+
+  it("still rejects blank and oversized activity IDs", () => {
+    expect(DeleteActivitySchema.safeParse({ id: " " }).success).toBe(false);
+    expect(DeleteActivitySchema.safeParse({ id: "a".repeat(129) }).success).toBe(false);
+  });
+});
