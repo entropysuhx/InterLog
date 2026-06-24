@@ -10,7 +10,7 @@ import { prisma } from "@/lib/db";
 import { consumeRateLimit, getRateLimitStatus } from "@/lib/rate-limit";
 import type { ActionResult } from "@/types";
 
-const TOKEN_TTL_MS = 15 * 60 * 1000;
+const TOKEN_TTL_MS = 10 * 60 * 1000;
 const LOGIN_LIMIT = 5;
 const LOGIN_WINDOW_SECONDS = 15 * 60;
 
@@ -30,12 +30,28 @@ function tokenHash(token: string): string {
 
 export async function registerWithPassword(
   input: z.infer<typeof RegisterSchema>,
-): Promise<ActionResult<{ verificationRequired: true; email: string }>> {
+): Promise<
+  ActionResult<{ verificationRequired: true; email: string; resumedVerification: boolean }>
+> {
   const parsed = RegisterSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "Check your registration details." };
   const email = parsed.data.email.toLowerCase();
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) return { success: false, error: "An account already exists for this email." };
+  const existing = await prisma.user.findUnique({
+    where: { email },
+    include: { credential: true, accounts: { select: { provider: true } } },
+  });
+  if (existing) {
+    const isGoogleAccount = existing.accounts.some((account) => account.provider === "google");
+    if (existing.emailVerified || !existing.credential || isGoogleAccount) {
+      return { success: false, error: "An account already exists for this email." };
+    }
+    const resendResult = await resendVerificationEmail({ email });
+    if (!resendResult.success) return { success: false, error: resendResult.error };
+    return {
+      success: true,
+      data: { verificationRequired: true, email, resumedVerification: true },
+    };
+  }
   const passwordHash = await hashPassword(parsed.data.password);
   const token = randomBytes(32).toString("hex");
   let createdUserId: string | null = null;
@@ -63,16 +79,18 @@ export async function registerWithPassword(
   } catch (error) {
     console.error("Failed to create account verification email", error);
     if (createdUserId) {
-      await prisma.$transaction([
-        prisma.verificationToken.deleteMany({ where: { identifier: `verify:${email}` } }),
-        prisma.user.delete({ where: { id: createdUserId } }),
-      ]).catch((cleanupError) => {
-        console.error("Failed to clean up unverified account after email error", cleanupError);
-      });
+      await prisma
+        .$transaction([
+          prisma.verificationToken.deleteMany({ where: { identifier: `verify:${email}` } }),
+          prisma.user.delete({ where: { id: createdUserId } }),
+        ])
+        .catch((cleanupError) => {
+          console.error("Failed to clean up unverified account after email error", cleanupError);
+        });
     }
     return { success: false, error: "We couldn't send the email right now. Please try again." };
   }
-  return { success: true, data: { verificationRequired: true, email } };
+  return { success: true, data: { verificationRequired: true, email, resumedVerification: false } };
 }
 
 export async function verifyEmail(input: {
@@ -91,7 +109,10 @@ export async function verifyEmail(input: {
     },
   });
   if (!verification || verification.expires < new Date()) {
-    return { success: false, error: "This verification code has expired. Please request a new one." };
+    return {
+      success: false,
+      error: "This verification code has expired. Please request a new one.",
+    };
   }
   await prisma.$transaction([
     prisma.user.update({ where: { email }, data: { emailVerified: new Date() } }),
@@ -104,7 +125,9 @@ export async function verifyEmail(input: {
   return { success: true, data: undefined };
 }
 
-export async function resendVerificationEmail(input: { email: string }): Promise<ActionResult<void>> {
+export async function resendVerificationEmail(input: {
+  email: string;
+}): Promise<ActionResult<void>> {
   const parsed = EmailSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "Enter a valid email address." };
   const email = parsed.data.email.toLowerCase();
@@ -131,11 +154,11 @@ export async function resendVerificationEmail(input: { email: string }): Promise
     await sendVerificationEmail(email, token);
   } catch (error) {
     console.error("Failed to resend verification email", error);
-    await prisma.verificationToken.deleteMany({ where: { identifier: `verify:${email}` } }).catch(
-      (cleanupError) => {
+    await prisma.verificationToken
+      .deleteMany({ where: { identifier: `verify:${email}` } })
+      .catch((cleanupError) => {
         console.error("Failed to clean up verification token after email error", cleanupError);
-      },
-    );
+      });
     return { success: false, error: "We couldn't send the email right now. Please try again." };
   }
   return { success: true, data: undefined };

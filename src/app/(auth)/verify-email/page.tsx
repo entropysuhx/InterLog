@@ -7,19 +7,28 @@ import ResendVerificationForm from "@/components/auth/ResendVerificationForm";
 export default async function VerifyEmailPage({
   searchParams,
 }: {
-  searchParams: Promise<{ email?: string; token?: string }>;
+  searchParams: Promise<{ email?: string; token?: string; resumed?: string }>;
 }) {
   const parameters = await searchParams;
   if (parameters.email && !parameters.token) {
     return (
       <AuthCard
         title="Check your email"
-        description="We sent a verification link to your inbox. Open it to finish creating your InterLog account."
-        footer={<Link href="/login" className="text-interactive-primary">Back to sign in</Link>}
+        description={
+          parameters.resumed === "1"
+            ? "An account with this email is waiting for verification. We sent you a new verification email."
+            : "We sent a verification link to your inbox. Open it to finish creating your InterLog account."
+        }
+        footer={
+          <Link href="/login" className="text-interactive-primary">
+            Back to sign in
+          </Link>
+        }
       >
         <div className="space-y-ds-16">
           <p className="rounded-lg bg-surface-subtle p-ds-16 text-body-sm text-text-secondary">
-            After verification, you can sign in and choose whether to import guest data from this device.
+            After verification, you can sign in and choose whether to import guest data from this
+            device.
           </p>
           <ResendVerificationForm email={parameters.email} />
         </div>
@@ -38,7 +47,11 @@ export default async function VerifyEmailPage({
           ? "Your account is ready. Sign in to choose whether to import guest data."
           : result.error
       }
-      footer={<Link href="/dashboard" className="text-interactive-primary">Return to guest mode</Link>}
+      footer={
+        <Link href="/dashboard" className="text-interactive-primary">
+          Return to guest mode
+        </Link>
+      }
     >
       <div className="space-y-ds-12">
         <Link

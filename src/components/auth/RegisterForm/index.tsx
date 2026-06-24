@@ -29,9 +29,16 @@ export default function RegisterForm() {
         setStatusTone("error");
         return;
       }
-      setStatus("Verification email sent. Check your inbox to finish creating your account.");
+      setStatus(
+        result.data.resumedVerification
+          ? "An account with this email is waiting for verification. We sent you a new verification email."
+          : "Verification email sent. Check your inbox to finish creating your account.",
+      );
       setStatusTone("success");
-      window.location.assign(`/verify-email?email=${encodeURIComponent(result.data.email)}`);
+      const verificationUrl = new URL("/verify-email", window.location.origin);
+      verificationUrl.searchParams.set("email", result.data.email);
+      if (result.data.resumedVerification) verificationUrl.searchParams.set("resumed", "1");
+      window.location.assign(verificationUrl.toString());
     } catch (error) {
       console.error("Registration request failed", error);
       setStatus("We couldn't create your account right now. Please try again.");
